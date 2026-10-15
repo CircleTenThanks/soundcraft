@@ -25,6 +25,20 @@ const BOLD: &[(&str, u32)] = &[
     ("/usr/local/share/fonts/dejavu/DejaVuSans-Bold.ttf", 0),
     ("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", 0),
 ];
+/// 日本語のフォールバック。各ファミリーへ足し、画面の言語に関わらず日本語を描く。
+/// ハングルより前に置く。符号位置が重なる漢字は、日本語の字形を先に使う。
+/// Noto Sans CJK のフェイス 0 は日本語。地域別の JP ファイルを、全集より先に探す。
+const JAPANESE: &[(&str, u32)] = &[
+    ("/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc", 0),
+    ("C:\\Windows\\Fonts\\YuGothM.ttc", 0),
+    ("C:\\Windows\\Fonts\\meiryo.ttc", 0),
+    ("C:\\Windows\\Fonts\\msgothic.ttc", 0),
+    ("/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf", 0),
+    ("/usr/share/fonts/noto-cjk/NotoSansCJKjp-Regular.otf", 0),
+    ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0),
+    ("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", 0),
+    ("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc", 0),
+];
 /// Hangul fallback, appended after every family so Korean session, track and clip names draw
 /// whatever the interface language. The Noto Sans CJK collection's face 1 is its Korean face.
 const HANGUL: &[(&str, u32)] = &[
@@ -121,6 +135,12 @@ pub fn definitions() -> FontDefinitions {
         bold_family.insert(0, "system-regular".into());
     }
     fonts.families.insert(FontFamily::Name("bold".into()), bold_family);
+    if let Some(j) = load(JAPANESE, "sans-serif:lang=ja", Some("ja")) {
+        fonts.font_data.insert("system-japanese".into(), Arc::new(j));
+        for family in fonts.families.values_mut() {
+            family.push("system-japanese".into());
+        }
+    }
     if let Some(h) = load(HANGUL, "sans-serif:lang=ko", Some("ko")) {
         fonts.font_data.insert("system-hangul".into(), Arc::new(h));
         for family in fonts.families.values_mut() {
@@ -145,6 +165,48 @@ mod tests {
         }
         // Face 0 of the Noto Sans CJK collection is Japanese; the Korean face is 1.
         assert!(HANGUL.iter().filter(|(p, _)| p.ends_with("NotoSansCJK-Regular.ttc")).all(|(_, i)| *i == 1));
+    }
+
+    #[test]
+    fn japanese_candidates_cover_every_desktop_platform() {
+        for prefix in ["/System/Library/Fonts/", "C:\\Windows\\Fonts\\", "/usr/share/fonts/"] {
+            assert!(JAPANESE.iter().any(|(p, _)| p.starts_with(prefix)), "no Japanese candidate under {prefix}");
+        }
+        assert!(JAPANESE.iter().filter(|(p, _)| p.ends_with("NotoSansCJK-Regular.ttc")).all(|(_, i)| *i == 0));
+    }
+
+    /// 日本語が各ファミリーで描けること。システムの日本語フォントが無いときは飛ばす。
+    #[test]
+    fn every_family_draws_japanese_with_a_system_japanese_font() {
+        let defs = definitions();
+        if !defs.font_data.contains_key("system-japanese") {
+            eprintln!("skipping: no Japanese system font");
+            return;
+        }
+        let families: Vec<FontFamily> = defs.families.keys().cloned().collect();
+        let ctx = egui::Context::default();
+        ctx.set_fonts(defs);
+        let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
+        output.textures_delta.clear();
+        for family in families {
+            let font = egui::FontId::new(13.0, family.clone());
+            assert!(ctx.fonts_mut(|f| f.has_glyphs(&font, "あア日本語")), "{family:?} has no Japanese");
+        }
+    }
+
+    /// 漢字の符号位置が重なるとき、日本語の字形をハングルより先に使う。
+    #[test]
+    fn japanese_precedes_hangul_when_both_exist() {
+        let defs = definitions();
+        if !defs.font_data.contains_key("system-japanese") || !defs.font_data.contains_key("system-hangul") {
+            eprintln!("skipping: Japanese and Korean system fonts are not both present");
+            return;
+        }
+        for (family, names) in &defs.families {
+            let japanese = names.iter().position(|n| n == "system-japanese");
+            let hangul = names.iter().position(|n| n == "system-hangul");
+            assert!(japanese.is_some() && hangul.is_some() && japanese < hangul, "{family:?}");
+        }
     }
 
     /// Korean names draw in every family, not as boxes; skipped when the system has no Korean font.
