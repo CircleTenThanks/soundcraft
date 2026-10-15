@@ -40,12 +40,12 @@ fn press(h: &mut Harness<SoundApp>, at: Pos2, pressed: bool, modifiers: Modifier
 #[test]
 fn a_sends_level_opens_its_send_window() {
     let (mut h, vox) = harness();
-    h.get_by_label("Send A level").click();
+    h.get_by_label("センド A レベル").click();
     h.run_steps(3);
     assert_eq!(h.state().ui.send_window, Some((vox, 0)));
-    assert!(h.query_by_label_contains("Vox · Send A").is_some());
+    assert!(h.query_by_label_contains("Vox · センド A").is_some());
 
-    let fader = h.get_by_label("Send level").rect();
+    let fader = h.get_by_label("センドレベル").rect();
     h.hover_at(fader.center());
     press(&mut h, fader.center(), true, Modifiers::ALT);
     press(&mut h, fader.center(), false, Modifiers::ALT);
@@ -62,37 +62,37 @@ fn a_sends_level_opens_its_send_window() {
     assert_eq!(level(&h, 0), -144.0, "the fader goes down to −∞");
     assert_eq!(level(&h, 1), -10.0);
 
-    h.get_by_label("Send B level").click();
+    h.get_by_label("センド B レベル").click();
     h.run_steps(3);
     assert_eq!(h.state().ui.send_window, Some((vox, 1)), "another send's level moves the window there");
-    assert!(h.query_by_label_contains("Vox · Send B").is_some());
-    h.get_by_label("Send B level").click();
+    assert!(h.query_by_label_contains("Vox · センド B").is_some());
+    h.get_by_label("センド B レベル").click();
     h.run_steps(3);
     assert_eq!(h.state().ui.send_window, None, "clicking the same send again closes it");
-    assert!(h.query_by_label_contains("Vox · Send").is_none());
+    assert!(h.query_by_label_contains("Vox · センド").is_none());
 }
 
 #[test]
 fn escape_closes_the_send_window_after_menus_and_typing() {
     let (mut h, vox) = harness();
-    h.get_by_label("Send A level").click();
+    h.get_by_label("センド A レベル").click();
     h.run_steps(3);
 
     // A right-click menu on top takes the first Escape.
-    let at = h.get_by_label("Send A level").rect().center();
+    let at = h.get_by_label("センド A レベル").rect().center();
     h.hover_at(at);
     for pressed in [true, false] {
         h.event(Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed, modifiers: Modifiers::NONE });
     }
     h.run_steps(3);
-    assert!(h.query_by_label("Pre-fader").is_some(), "the send's options menu is open");
+    assert!(h.query_by_label("プリフェーダー").is_some(), "the send's options menu is open");
     h.key_press(egui::Key::Escape);
     h.run_steps(3);
-    assert!(h.query_by_label("Pre-fader").is_none());
+    assert!(h.query_by_label("プリフェーダー").is_none());
     assert_eq!(h.state().ui.send_window, Some((vox, 0)), "that Escape only closed the menu");
 
     // So does typing a level in the window.
-    let fader = h.get_by_label("Send level").rect();
+    let fader = h.get_by_label("センドレベル").rect();
     let field = egui::pos2(fader.center().x, fader.max.y + 10.0);
     h.hover_at(field);
     press(&mut h, field, true, Modifiers::NONE);

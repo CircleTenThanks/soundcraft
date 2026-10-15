@@ -148,7 +148,7 @@ fn a_built_in_instruments_menu_opens_its_parameters() {
         .build_ui_state(move |ui, app: &mut SoundApp| soundcraft_ui_egui::mix_window::instrument_menu(app, ui, keys), app);
     h.step();
     assert!(h.state().ui.plugin_windows.is_empty());
-    h.get_by_label("Edit Parameters…").click();
+    h.get_by_label("パラメータを編集…").click();
     h.step();
     assert_eq!(h.state().ui.plugin_windows, vec![(keys, soundcraft_mix::INSTRUMENT_SLOT)]);
 }

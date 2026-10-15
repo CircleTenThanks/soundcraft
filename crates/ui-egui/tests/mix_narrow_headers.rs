@@ -3,8 +3,8 @@ use serde_json::json;
 use soundcraft_ui_egui::mix_window::strip_width;
 use soundcraft_ui_egui::{Services, SoundApp};
 
-const FULL: [&str; 7] = ["INSERTS A-E", "INSERTS F-J", "SENDS A-E", "SENDS F-J", "INSTRUMENT", "comments", "no group"];
-const SHORT: [&str; 6] = ["I A-E", "I F-J", "S A-E", "S F-J", "INST", "nogrp"];
+const FULL: [&str; 7] = ["挿A–E", "挿F–J", "送A–E", "送F–J", "音源", "コメント", "グループなし"];
+const SHORT: [&str; 6] = ["挿A–E", "挿F–J", "送A–E", "送F–J", "音源", "無"];
 
 /// egui's built-in fonts only, as on a system with no fonts installed (the FreeBSD CI VM): the
 /// "bold" family is then the regular built-in face, narrower than any system bold.

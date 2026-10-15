@@ -8,6 +8,22 @@ use soundcraft_ui_egui::{MainWindow, Services, SoundApp};
 
 const CMD: Modifiers = Modifiers { mac_cmd: true, command: true, ..Modifiers::NONE };
 
+fn shown_category(category: impl std::fmt::Debug) -> String {
+    match format!("{category:?}").as_str() {
+        "Eq" => "EQ".into(),
+        "PitchShift" => "ピッチシフト".into(),
+        "Dither" => "ディザー".into(),
+        "Dynamics" => "ダイナミクス".into(),
+        "Reverb" => "リバーブ".into(),
+        "Delay" => "ディレイ".into(),
+        "Modulation" => "モジュレーション".into(),
+        "Harmonic" => "ハーモニック".into(),
+        "Instrument" => "音源".into(),
+        "Other" => "その他".into(),
+        other => other.to_string(),
+    }
+}
+
 fn step(h: &mut Harness<'_, SoundApp>) {
     let mut raw = std::mem::take(h.input_mut());
     h.state_mut().raw_input_hook(&mut raw);
@@ -73,7 +89,7 @@ fn header_keys_freeze_silence_and_show_automation() {
     assert!(kick(&h).frozen);
 
     click(&mut h, at(46.5, 65.5));
-    let off = h.get_by_label("off").rect().center();
+    let off = h.get_by_label("オフ").rect().center();
     click(&mut h, off);
     assert!(kick(&h).inactive);
 
@@ -98,13 +114,13 @@ fn edit_window_insert_slots_open_change_and_add_plugins() {
     assert!(h.state().ui.plugin_windows.is_empty());
 
     press(&mut h, slot(1), PointerButton::Secondary, Modifiers::NONE);
-    let remove = h.get_by_label("no insert").rect().center();
+    let remove = h.get_by_label("インサートなし").rect().center();
     click(&mut h, remove);
     assert_eq!(insert(&h, 1), None);
 
     let plugin = soundcraft_dsp::plugins().iter().find(|p| !p.is_instrument).unwrap();
     click(&mut h, slot(2));
-    let category = h.get_by_label(&format!("{:?} ⏵", plugin.category)).rect().center();
+    let category = h.get_by_label(&format!("{} ⏵", shown_category(plugin.category))).rect().center();
     h.state_mut().synthetic.push(Event::PointerMoved(category));
     for _ in 0..10 {
         step(&mut h);
@@ -127,7 +143,7 @@ fn short_tracks_show_insert_slots_as_squares() {
 
     click(&mut h, square(4));
     let plugin = soundcraft_dsp::plugins().iter().find(|p| !p.is_instrument).unwrap();
-    assert!(h.query_by_label(&format!("{:?} ⏵", plugin.category)).is_some());
+    assert!(h.query_by_label(&format!("{} ⏵", shown_category(plugin.category))).is_some());
 }
 
 #[test]
@@ -135,21 +151,21 @@ fn the_views_menu_stays_open_until_a_click_elsewhere() {
     let (mut h, _, _) = harness("Kick", "medium", "view.edit_inserts_ae");
     let views = h.get_by_label("Views").rect().center();
     click(&mut h, views);
-    for column in ["Sends A-E", "I/O"] {
+    for column in ["センド A–E", "I/O"] {
         let item = h.get_by_label(column).rect().center();
         click(&mut h, item);
     }
     let edit = &h.state().engine.session().edit;
     assert!(edit.flag("edit_view.sends_ae") && edit.flag("edit_view.io"));
     click(&mut h, pos2(800.0, 990.0));
-    assert!(h.query_by_label("Sends A-E").is_none());
+    assert!(h.query_by_label("センド A–E").is_none());
 }
 
 #[test]
 fn the_io_columns_route_menus_stay_open_while_searching_buses() {
     let (mut h, _, row) = harness("Kick", "medium", "view.edit_io");
     click(&mut h, pos2(row[0] + HEADER_W + 40.0, row[1] + 29.5));
-    let bus = h.get_by_label("Bus").rect();
+    let bus = h.get_by_label("バス").rect();
     let search = h
         .query_all_by_role(egui::accesskit::Role::TextInput)
         .map(|node| node.rect())
@@ -158,7 +174,7 @@ fn the_io_columns_route_menus_stay_open_while_searching_buses() {
         .unwrap()
         .center();
     click(&mut h, search);
-    assert!(h.query_by_label("no output").is_some(), "a click in the bus search closed the Output menu");
+    assert!(h.query_by_label("出力なし").is_some(), "a click in the bus search closed the Output menu");
 }
 
 #[test]
@@ -168,11 +184,11 @@ fn only_a_sends_fader_icon_opens_its_level() {
 
     // The right of the name, where the level used to start, picks the destination.
     click(&mut h, send_a(50.0));
-    assert!(h.query_by_label("DESTINATION").is_some());
+    assert!(h.query_by_label("送り先").is_some());
     assert_eq!(h.state().ui.send_window, None);
     click(&mut h, pos2(800.0, 990.0));
 
     click(&mut h, send_a(65.5));
     assert_eq!(h.state().ui.send_window, Some((snare, 0)));
-    assert!(h.query_by_label("DESTINATION").is_none());
+    assert!(h.query_by_label("送り先").is_none());
 }
