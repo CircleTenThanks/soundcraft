@@ -69,6 +69,24 @@ impl Rig {
     }
 }
 
+/// 操作バーはタイムラインより下にある。オーバービューを出すと、タイムラインはその下へずれる。
+#[test]
+fn the_toolbar_is_below_the_timeline_and_the_universe_stays_above_it() {
+    let mut r = Rig::new();
+    let tempo = r.field(120.0).y;
+    let timeline_top = r.app.edit_layout.timeline[1];
+    let timeline_bottom = r.app.edit_layout.timeline[3];
+    let toolbar_top = 1000.0 - 22.0 - 22.0 - soundcraft_ui_egui::toolbar::HEIGHT;
+    assert!(tempo > timeline_bottom, "tempo at {tempo}, timeline bottom {timeline_bottom}");
+    assert!(tempo > toolbar_top, "tempo at {tempo}, toolbar top {toolbar_top}");
+
+    r.app.ui.show_universe = true;
+    r.frames(2);
+    let with_universe = r.app.edit_layout.timeline[1];
+    assert!(with_universe > timeline_top + 32.0, "universe top {timeline_top}, with universe {with_universe}");
+    assert!(r.field(120.0).y > r.app.edit_layout.timeline[3]);
+}
+
 #[test]
 fn dragging_the_toolbar_tempo_changes_it_in_one_undo_step() {
     let mut r = Rig::new();
