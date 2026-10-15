@@ -1,6 +1,7 @@
 //! The Edit window: toolbar, rulers, track headers and playlists.
 
 use crate::dialogs::Dialog;
+use crate::l10n::{tr, tr_fmt, tr_lane};
 use crate::spot::Spot;
 use crate::theme::{Tokens, bold, clip_colors, regular, rgb};
 use crate::widgets::{groove, level_pos, meter_pos, raised_key, shade};
@@ -163,7 +164,7 @@ fn dock_tabs(app: &mut SoundApp, ui: &mut Ui) {
         ("MEMORY LOCATIONS", app.ui.show_memory_locations, "window.memory_locations"),
         ("UNDO HISTORY", app.ui.show_undo_history, "window.undo_history"),
     ] {
-        let g = ui.painter().layout_no_wrap(label.to_string(), bold(10.5), if on { Color32::WHITE } else { t.text_dim });
+        let g = ui.painter().layout_no_wrap(tr(label), bold(10.5), if on { Color32::WHITE } else { t.text_dim });
         let tr = Rect::from_min_size(pos2(x, r.min.y + 2.0), vec2(g.size().x + 16.0, r.height() - 4.0));
         if on {
             ui.painter().rect_filled(tr, 3.0, t.accent_dark);
@@ -180,25 +181,28 @@ fn status_bar(app: &mut SoundApp, ui: &mut Ui) {
     let t = Tokens::current();
     let r = ui.max_rect();
     let s = app.engine.session();
-    let mut left = format!(
-        "{} · {} Hz · {} · {} tracks · {}",
-        s.name,
-        s.sample_rate.hz(),
-        match s.bit_depth {
-            soundcraft_model::BitDepthSetting::Int16 => "16-bit",
-            soundcraft_model::BitDepthSetting::Int24 => "24-bit",
-            soundcraft_model::BitDepthSetting::Float32 => "32-bit float",
-        },
-        s.tracks.len(),
-        app.ui.status
+    let depth = match s.bit_depth {
+        soundcraft_model::BitDepthSetting::Int16 => tr("16-bit"),
+        soundcraft_model::BitDepthSetting::Int24 => tr("24-bit"),
+        soundcraft_model::BitDepthSetting::Float32 => tr("32-bit float"),
+    };
+    let mut left = tr_fmt(
+        "{name} · {hz} Hz · {depth} · {n} tracks · {status}",
+        &[
+            ("name", s.name.as_str()),
+            ("hz", &s.sample_rate.hz().to_string()),
+            ("depth", &depth),
+            ("n", &s.tracks.len().to_string()),
+            ("status", app.ui.status.as_str()),
+        ],
     );
     soundcraft_model::truncate_chars(&mut left, 4 * soundcraft_model::MAX_NAME_CHARS);
     ui.painter().text(pos2(r.min.x + 10.0, r.center().y), Align2::LEFT_CENTER, left, regular(11.0), t.text_dim);
-    let undo = app.engine.undo_label().map_or(String::new(), |l| format!("Undo {l}"));
+    let undo = app.engine.undo_label().map_or(String::new(), |l| tr_fmt("Undo {action}", &[("action", &tr(l))]));
     ui.painter().text(
         pos2(r.max.x - 10.0, r.center().y),
         Align2::RIGHT_CENTER,
-        if app.frame_ms < 50.0 { format!("{undo}   {:.1} ms/frame", app.frame_ms) } else { undo },
+        if app.frame_ms < 50.0 { tr_fmt("{undo}   {ms} ms/frame", &[("undo", &undo), ("ms", &format!("{:.1}", app.frame_ms))]) } else { undo },
         regular(11.0),
         t.text_dim,
     );
@@ -503,7 +507,7 @@ fn draw_rulers(app: &mut SoundApp, ui: &mut Ui, area: Rect, tl: Rect, rulers: &[
         let lab = Rect::from_min_max(pos2(area.min.x, y0), pos2(area.min.x + HEADER_W, y0 + h));
         y0 += h;
         let painter = ui.painter().with_clip_rect(row);
-        ui.painter().text(pos2(lab.max.x - 12.0, lab.center().y), Align2::RIGHT_CENTER, ruler_label(id), bold(11.0), t.ruler_text);
+        ui.painter().text(pos2(lab.max.x - 12.0, lab.center().y), Align2::RIGHT_CENTER, tr(ruler_label(id)), bold(11.0), t.ruler_text);
         let fmt = TimeFormat::from_id(id);
         match id.as_str() {
             "tempo" => {
@@ -777,7 +781,7 @@ fn column_titles(ui: &Ui, rulers: Rect, cols: &[Column]) {
     ui.painter().vline(end - 0.5, row.y_range(), line);
     for &(_, _, title, w) in cols {
         ui.painter().vline(x + 0.5, row.y_range(), line);
-        ui.painter().text(pos2(x + w / 2.0, row.center().y), Align2::CENTER_CENTER, title, bold(10.0), t.section_label);
+        ui.painter().text(pos2(x + w / 2.0, row.center().y), Align2::CENTER_CENTER, tr(title), bold(10.0), t.section_label);
         x += w;
     }
 }
@@ -786,21 +790,21 @@ fn column_titles(ui: &Ui, rulers: Rect, cols: &[Column]) {
 fn views_button(app: &mut SoundApp, ui: &mut Ui, rulers: Rect) {
     let r = Rect::from_min_size(rulers.min + vec2(6.0, 5.0), vec2(50.0, 18.0));
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(r));
-    let resp = crate::widgets::selector_box(&mut child, r.width(), r.height(), "Views", Tokens::current().text);
+    let resp = crate::widgets::selector_box(&mut child, r.width(), r.height(), &tr("Views"), Tokens::current().text);
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, child.is_enabled(), "Views"));
-    let resp = resp.on_hover_text("Columns beside the track headers: inserts, sends, I/O…");
+    let resp = resp.on_hover_text(tr("Columns beside the track headers: inserts, sends, I/O…"));
     egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
         let shown = edit_columns(app.engine.session());
         for (id, label, _, _) in COLUMNS {
-            if ui.add(egui::Button::new(label).selected(shown.iter().any(|c| c.0 == id))).clicked() {
+            if ui.add(egui::Button::new(tr(label)).selected(shown.iter().any(|c| c.0 == id))).clicked() {
                 let _ = app.run(&format!("view.edit_{id}"), json!({}));
             }
         }
         ui.separator();
-        if ui.button("All").clicked() {
+        if ui.button(tr("All")).clicked() {
             let _ = app.run("view.edit_all", json!({}));
         }
-        if ui.button("Minimal").clicked() {
+        if ui.button(tr("Minimal")).clicked() {
             let _ = app.run("view.edit_minimal", json!({}));
         }
     });
@@ -903,7 +907,7 @@ fn playlist_lanes(app: &mut SoundApp, ui: &mut Ui, track: &Track, row: Rect, mai
                 let _ = app.run("track.playlist_promote", json!({"track": track.id.0, "playlist": i, "start": a, "end": b}));
             }
         }
-        resp.on_hover_text("Click a take (or the selection) to promote it to the main playlist");
+        resp.on_hover_text(tr("Click a take (or the selection) to promote it to the main playlist"));
         y += LANE_H;
     }
 }
@@ -955,11 +959,11 @@ fn track_header(app: &mut SoundApp, ui: &mut Ui, track: &Track, head: Rect, sele
     ui.painter().circle_filled(round.center(), 5.0, shade(strip, if rresp.hovered() { 0.6 } else { 0.45 }));
     arrow(ui.painter(), round.center(), !track.is_folder() || track.folder_open, ink);
     if track.is_folder() {
-        if rresp.on_hover_text(if track.folder_open { "Close folder" } else { "Open folder" }).clicked() {
+        if rresp.on_hover_text(tr(if track.folder_open { "Close folder" } else { "Open folder" })).clicked() {
             let _ = app.run("track.folder_toggle", json!({"track": id.0}));
         }
     } else {
-        egui::Popup::menu(&rresp.on_hover_text("Track options")).show(|ui| track_context_menu(app, ui, id));
+        egui::Popup::menu(&rresp.on_hover_text(tr("Track options"))).show(|ui| track_context_menu(app, ui, id));
     }
     if h >= 40.0 && track.kind.has_playlist() {
         let ar = at(3.0, h - 12.0, 9.0, 9.0);
@@ -970,7 +974,7 @@ fn track_header(app: &mut SoundApp, ui: &mut Ui, track: &Track, head: Rect, sele
         ui.painter().line_segment([a, b], Stroke::new(1.0, ink));
         ui.painter().circle_filled(a, 1.3, ink);
         ui.painter().circle_filled(b, 1.3, ink);
-        if aresp.on_hover_text(if showing { "Hide automation" } else { "Show volume automation" }).clicked() {
+        if aresp.on_hover_text(tr(if showing { "Hide automation" } else { "Show volume automation" })).clicked() {
             let view = if !showing {
                 "volume"
             } else if track.kind.is_midi() {
@@ -1037,14 +1041,14 @@ fn track_header(app: &mut SoundApp, ui: &mut Ui, track: &Track, head: Rect, sele
     let presp = ui.interact(pl_r, ui.id().with(("pl", id.0)), Sense::click());
     ui.painter().rect_filled(pl_r, 1.5, shade(head_bg, if presp.hovered() { -0.2 } else { -0.35 }));
     arrow(ui.painter(), pos2(pl_r.center().x, pl_r.min.y + 5.75), true, t.text);
-    egui::Popup::menu(&presp.on_hover_text("Playlists")).show(|ui| {
-        if ui.button("New...").clicked() {
+    egui::Popup::menu(&presp.on_hover_text(tr("Playlists"))).show(|ui| {
+        if ui.button(tr("New...")).clicked() {
             let _ = app.run("track.playlist_new", json!({"track": id.0}));
         }
-        if ui.button("Duplicate...").clicked() {
+        if ui.button(tr("Duplicate...")).clicked() {
             let _ = app.run("track.playlist_duplicate", json!({"track": id.0}));
         }
-        if ui.button("Delete Unused...").clicked() {
+        if ui.button(tr("Delete Unused...")).clicked() {
             let _ = app.run("track.playlist_delete_unused", json!({"track": id.0}));
         }
         ui.separator();
@@ -1083,16 +1087,16 @@ fn track_header(app: &mut SoundApp, ui: &mut Ui, track: &Track, head: Rect, sele
                 let d = vec2(a.to_radians().sin(), a.to_radians().cos()) * 3.5;
                 ui.painter().line_segment([r.center() - d, r.center() + d], Stroke::new(1.5, t.text));
             }
-            if resp.on_hover_text(if track.frozen { "Unfreeze" } else { "Freeze" }).clicked() {
+            if resp.on_hover_text(tr(if track.frozen { "Unfreeze" } else { "Freeze" })).clicked() {
                 let _ = app.run("track.freeze", json!({"tracks": [id.0]}));
             }
         }
         if !matches!(track.kind, TrackKind::Master | TrackKind::Vca | TrackKind::Folder) {
             let (voice, color) = if track.inactive { ("off", t.text_dim) } else { ("dyn", t.text) };
-            let resp = header_selector(ui, at(31.0, 57.0, 31.0, 17.0), ui.id().with(("voice", id.0)), voice, color, false);
-            egui::Popup::menu(&resp.on_hover_text("Voice: dyn plays the track, off makes it inactive")).show(|ui| {
+            let resp = header_selector(ui, at(31.0, 57.0, 31.0, 17.0), ui.id().with(("voice", id.0)), &tr(voice), color, false);
+            egui::Popup::menu(&resp.on_hover_text(tr("Voice: dyn plays the track, off makes it inactive"))).show(|ui| {
                 for (label, inactive) in [("dyn", false), ("off", true)] {
-                    if ui.selectable_label(track.inactive == inactive, label).clicked() {
+                    if ui.selectable_label(track.inactive == inactive, tr(label)).clicked() {
                         let _ = app.run("track.make_inactive", json!({"tracks": [id.0], "inactive": inactive}));
                     }
                 }
@@ -1106,10 +1110,10 @@ fn track_header(app: &mut SoundApp, ui: &mut Ui, track: &Track, head: Rect, sele
             soundcraft_model::AutomationMode::Latch => t.auto_latch,
             _ => t.text_dim,
         };
-        let aresp = header_selector(ui, at(63.0, 57.0, 59.0, 17.0), ui.id().with(("auto_mode", id.0)), mode.label(), col, true);
+        let aresp = header_selector(ui, at(63.0, 57.0, 59.0, 17.0), ui.id().with(("auto_mode", id.0)), &tr(mode.label()), col, true);
         egui::Popup::menu(&aresp).show(|ui| {
             for m in soundcraft_model::AutomationMode::ALL {
-                if ui.selectable_label(m == mode, m.label()).clicked() {
+                if ui.selectable_label(m == mode, tr(m.label())).clicked() {
                     let _ = app.run("mix.automation_mode", json!({"track": id.0, "mode": m.label()}));
                 }
             }
@@ -1135,9 +1139,9 @@ fn track_header(app: &mut SoundApp, ui: &mut Ui, track: &Track, head: Rect, sele
                 ui.painter().line_segment([c, c + vec2(3.25, 0.0)], Stroke::new(1.0, t.slot_face[1]));
             }
             let tip = if track.ticks_timebase { "Timebase: ticks" } else { "Timebase: samples" };
-            egui::Popup::menu(&resp.on_hover_text(tip)).show(|ui| {
+            egui::Popup::menu(&resp.on_hover_text(tr(tip))).show(|ui| {
                 for (label, ticks) in [("Samples", false), ("Ticks", true)] {
-                    if ui.selectable_label(track.ticks_timebase == ticks, label).clicked() {
+                    if ui.selectable_label(track.ticks_timebase == ticks, tr(label)).clicked() {
                         let _ = app.run("track.timebase", json!({"tracks": [id.0], "ticks": ticks}));
                     }
                 }
@@ -1148,10 +1152,13 @@ fn track_header(app: &mut SoundApp, ui: &mut Ui, track: &Track, head: Rect, sele
             let resp = ui.interact(field, ui.id().with(("field", id.0)), Sense::click());
             ui.painter().rect_filled(field, 2.0, shade(head_bg, if resp.hovered() { -0.02 } else { -0.1 }));
             if track.kind == TrackKind::Instrument {
-                let name =
-                    track.instrument.as_ref().and_then(|i| crate::mix_window::plugin_info(&i.plugin)).map_or("no instrument", |p| p.short_name);
+                let name = track
+                    .instrument
+                    .as_ref()
+                    .and_then(|i| crate::mix_window::plugin_info(&i.plugin))
+                    .map_or_else(|| tr("no instrument"), |p| p.short_name.to_string());
                 ui.painter().with_clip_rect(field).text(pos2(field.min.x + 5.0, field.center().y), Align2::LEFT_CENTER, name, bold(10.0), t.text);
-                egui::Popup::menu(&resp.on_hover_text("Instrument"))
+                egui::Popup::menu(&resp.on_hover_text(tr("Instrument")))
                     .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
                     .show(|ui| crate::mix_window::instrument_menu(app, ui, id));
             } else {
@@ -1161,10 +1168,10 @@ fn track_header(app: &mut SoundApp, ui: &mut Ui, track: &Track, head: Rect, sele
                 if let Some(alg) = &track.elastic {
                     ui.painter().with_clip_rect(field).text(pos2(field.min.x + 14.0, field.center().y), Align2::LEFT_CENTER, alg, bold(10.0), t.text);
                 }
-                egui::Popup::menu(&resp.on_hover_text("Elastic Audio")).show(|ui| {
+                egui::Popup::menu(&resp.on_hover_text(tr("Elastic Audio"))).show(|ui| {
                     for alg in ["none", "polyphonic", "rhythmic", "monophonic", "varispeed", "x-form"] {
                         let current = track.elastic.as_deref().unwrap_or("none") == alg;
-                        if ui.selectable_label(current, alg).clicked() {
+                        if ui.selectable_label(current, tr(alg)).clicked() {
                             let _ = app.run("track.elastic", json!({"tracks": [id.0], "algorithm": alg}));
                         }
                     }
@@ -1243,7 +1250,7 @@ fn header_toggle(ui: &Ui, r: Rect, track: TrackId, key: HeaderKey, lit: bool, im
     } else {
         ui.painter().text(r.center(), Align2::CENTER_CENTER, label.get(..1).unwrap_or_default(), bold(11.0), ink);
     }
-    resp.on_hover_text(label)
+    resp.on_hover_text(tr(label))
 }
 
 /// The header's level meter: black-rimmed bars, dim where unlit, with a clip light on top.
@@ -1307,7 +1314,7 @@ fn io_column(app: &mut SoundApp, ui: &mut Ui, track: &Track, r: Rect) {
     let row = |y: f32, h: f32| (r.height() >= y + h + 1.0).then_some(Rect::from_min_size(r.min + vec2(7.0, y), vec2(r.width() - 14.0, h)));
     if let Some(input) = row(4.0, 15.0) {
         let resp = header_selector(&ui, input, ui.id().with(("in", id.0)), &crate::mix_window::input_name(app, track), t.text, true);
-        crate::mix_window::route_popup(app, &resp.on_hover_text("Input"), id, true);
+        crate::mix_window::route_popup(app, &resp.on_hover_text(tr("Input")), id, true);
     }
     if let Some(out) = row(21.0, 17.0) {
         let (sel, fader) = (out.with_max_x(out.max.x - 11.0), out.with_min_x(out.max.x - 11.0));
@@ -1320,8 +1327,8 @@ fn io_column(app: &mut SoundApp, ui: &mut Ui, track: &Track, r: Rect) {
         let c = fader.center() + vec2(0.5, 0.0);
         ui.painter().vline(c.x, c.y - 5.0..=c.y + 5.0, Stroke::new(1.0, t.text));
         ui.painter().rect_filled(Rect::from_center_size(c + vec2(0.0, -1.5), vec2(5.0, 2.5)), 0.5, t.text);
-        crate::mix_window::route_popup(app, &resp.on_hover_text("Output"), id, false);
-        if fresp.on_hover_text("Show in the Mix window").clicked() {
+        crate::mix_window::route_popup(app, &resp.on_hover_text(tr("Output")), id, false);
+        if fresp.on_hover_text(tr("Show in the Mix window")).clicked() {
             let _ = app.run("edit.select", json!({"tracks": [id.0]}));
             let _ = app.run("window.mix", json!({}));
         }
@@ -1334,7 +1341,7 @@ fn io_column(app: &mut SoundApp, ui: &mut Ui, track: &Track, r: Rect) {
         // The readout is black in both themes, so it takes the dark palette's green.
         let ink = Tokens::DARK.counter_text;
         for (y, label, value) in [(7.5, "vol", crate::widgets::db_text(m.volume_db)), (22.0, "pan", pan)] {
-            ui.painter().text(pos2(vr.min.x + 7.0, vr.min.y + y), Align2::LEFT_CENTER, label, bold(10.0), ink);
+            ui.painter().text(pos2(vr.min.x + 7.0, vr.min.y + y), Align2::LEFT_CENTER, tr(label), bold(10.0), ink);
             ui.painter().text(pos2(vr.max.x - 6.5, vr.min.y + y), Align2::RIGHT_CENTER, value, bold(10.0), ink);
         }
         ui.painter().hline(vr.min.x + 7.0..=vr.max.x - 6.0, vr.min.y + 14.5, Stroke::new(1.0, Color32::from_gray(35)));
@@ -1375,8 +1382,8 @@ fn plugin_column(app: &mut SoundApp, ui: &mut Ui, track: &Track, col: &str, r: R
 
 fn view_label(v: &str) -> String {
     match AutoParam::parse(v) {
-        Some(p) => p.label(),
-        None => v.to_string(),
+        Some(p) => tr_lane(&p.label()),
+        None => tr(v),
     }
 }
 
@@ -1397,10 +1404,10 @@ fn view_menu(app: &mut SoundApp, ui: &mut Ui, track: &Track) {
     for (slot, ins) in track.mixer.inserts.iter().enumerate() {
         let Some(ins) = ins else { continue };
         let Some(info) = soundcraft_dsp::plugin_info(&ins.plugin) else { continue };
-        ui.menu_button(info.name, |ui| {
+        ui.menu_button(tr(info.name), |ui| {
             for p in info.params {
                 let v = format!("plugin:{}:{}", (b'a' + slot as u8) as char, p.id);
-                if ui.button(p.name).clicked() {
+                if ui.button(tr(p.name)).clicked() {
                     let _ = app.run("track.view", json!({"track": id, "view": v}));
                 }
             }
@@ -1427,7 +1434,7 @@ pub(crate) fn track_context_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId) {
         if selected.contains(&id) { selected.iter().map(|track| track.0).collect() } else { vec![tid] }
     };
     for (label, cmd) in items {
-        if ui.button(label).clicked() {
+        if ui.button(tr(label)).clicked() {
             if cmd == "ui.rename_track" {
                 let name = app.engine.session().track(id).map(|t| t.name.clone()).unwrap_or_default();
                 app.dialogs.open_rename_track(id, &name);
@@ -1445,7 +1452,7 @@ pub(crate) fn track_context_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId) {
         .map(|track| (track.id.0, track.name.clone()))
         .collect();
     if !folders.is_empty() {
-        ui.menu_button("Move to Folder", |ui| {
+        ui.menu_button(tr("Move to Folder"), |ui| {
             for (folder, name) in &folders {
                 if ui.button(name).clicked() {
                     let _ = app.run("track.move_to_folder", json!({"tracks": selection, "folder": folder}));
@@ -1453,20 +1460,20 @@ pub(crate) fn track_context_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId) {
             }
         });
     }
-    if app.engine.session().track(id).is_some_and(|track| track.folder.is_some()) && ui.button("Remove from Folder").clicked() {
+    if app.engine.session().track(id).is_some_and(|track| track.folder.is_some()) && ui.button(tr("Remove from Folder")).clicked() {
         let _ = app.run("track.remove_from_folder", json!({"tracks": selection}));
     }
     ui.separator();
-    ui.menu_button("Track Height", |ui| {
+    ui.menu_button(tr("Track Height"), |ui| {
         for h in TrackHeight::ALL {
-            if ui.button(h.label()).clicked() {
+            if ui.button(tr(h.label())).clicked() {
                 let own: Vec<TrackId> = selection.iter().map(|&t| TrackId(t)).collect();
                 let tracks = height_targets(app.engine.session(), ui.input(|i| i.modifiers), &own);
                 let _ = app.run("track.height", json!({"tracks": tracks, "height": h.label()}));
             }
         }
     });
-    ui.menu_button("Track Color", |ui| {
+    ui.menu_button(tr("Track Color"), |ui| {
         for (i, c) in soundcraft_model::TRACK_COLORS.iter().enumerate() {
             let (r, resp) = ui.allocate_exact_size(vec2(120.0, 14.0), Sense::click());
             ui.painter().rect_filled(r, 2.0, rgb(*c));
@@ -1637,7 +1644,7 @@ fn draw_clip(app: &SoundApp, painter: &egui::Painter, s: &Session, track: &Track
                     }
                 }
             } else {
-                painter.text(body_r.center(), Align2::CENTER_CENTER, "media offline", regular(10.0), Color32::from_rgb(220, 120, 120));
+                painter.text(body_r.center(), Align2::CENTER_CENTER, tr("media offline"), regular(10.0), Color32::from_rgb(220, 120, 120));
             }
         }
         ClipContent::Video { .. } => {} // thumbnails: video_track::draw_lane
@@ -1841,7 +1848,7 @@ fn draw_automation(painter: &egui::Painter, s: &Session, track: &Track, p: &Auto
             }
         }
     }
-    painter.text(pos2(lane.min.x + 6.0, lane.min.y + 9.0), Align2::LEFT_CENTER, p.label(), regular(10.0), t.text_dim);
+    painter.text(pos2(lane.min.x + 6.0, lane.min.y + 9.0), Align2::LEFT_CENTER, tr_lane(&p.label()), regular(10.0), t.text_dim);
 }
 
 fn plugin_range(track: &Track, p: &AutoParam) -> (f32, f32) {
@@ -2523,7 +2530,7 @@ fn new_midi_clip(app: &mut SoundApp, s: &Session, track: TrackId, from: Samples,
 
 fn clip_context_menu(app: &mut SoundApp, ui: &mut Ui, clip: Option<ClipId>) {
     let Some(c) = clip else {
-        if ui.button("Paste").clicked() {
+        if ui.button(tr("Paste")).clicked() {
             let _ = app.run("edit.paste", json!({}));
         }
         return;
@@ -2538,16 +2545,16 @@ fn clip_context_menu(app: &mut SoundApp, ui: &mut Ui, clip: Option<ClipId>) {
         ("Bring to Front", "clip.bring_to_front"),
         ("Send to Back", "clip.send_to_back"),
     ] {
-        if ui.button(label).clicked() {
+        if ui.button(tr(label)).clicked() {
             let _ = app.run(cmd, json!({"clips": ids}));
         }
     }
     ui.separator();
-    if ui.button("Rename...").clicked() {
+    if ui.button(tr("Rename...")).clicked() {
         let name = app.engine.session().find_clip(c).map(|(_, x)| x.name.clone()).unwrap_or_default();
         app.dialogs.open_rename_clip(c, &name);
     }
-    if ui.button("Delete").clicked() {
+    if ui.button(tr("Delete")).clicked() {
         let _ = app.run("edit.select", json!({"clips": ids}));
         let _ = app.run("edit.clear", json!({}));
     }

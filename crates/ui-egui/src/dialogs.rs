@@ -623,10 +623,8 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
         keep = false;
         match app.run(&cmd, params) {
             Ok(v) if cmd == "file.export_clips" => {
-                app.ui.status = tr_fmt(
-                    "Exported {n} clip(s) to {dir}",
-                    &[("n", &v["written"].to_string()), ("dir", v["dir"].as_str().unwrap_or_default())],
-                );
+                app.ui.status =
+                    tr_fmt("Exported {n} clip(s) to {dir}", &[("n", &v["written"].to_string()), ("dir", v["dir"].as_str().unwrap_or_default())]);
             }
             Ok(_) => {}
             Err(e) => app.ui.status = e,

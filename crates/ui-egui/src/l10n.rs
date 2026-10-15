@@ -43,6 +43,26 @@ pub fn tr_grid(label: &str) -> String {
     tr(label)
 }
 
+/// オートメーションレーンの表示。`send A level` のような形を分ける。
+pub fn tr_lane(label: &str) -> String {
+    if let Some(n) = label.strip_prefix("pan ") {
+        return tr_fmt("pan {n}", &[("n", n)]);
+    }
+    if let Some(rest) = label.strip_prefix("send ") {
+        for (suffix, key) in [(" level", "send {slot} level"), (" pan", "send {slot} pan"), (" mute", "send {slot} mute")] {
+            if let Some(slot) = rest.strip_suffix(suffix) {
+                return tr_fmt(key, &[("slot", slot)]);
+            }
+        }
+    }
+    if let Some(rest) = label.strip_prefix("insert ")
+        && let Some((slot, param)) = rest.split_once(' ')
+    {
+        return tr_fmt("insert {slot} {param}", &[("slot", slot), ("param", &tr(param))]);
+    }
+    tr(label)
+}
+
 /// ダイアログ見出し。`メニュー — 項目` は、両側を別々に置き換える。
 pub fn tr_title(title: &str) -> String {
     if lookup(title).is_some() {
@@ -96,5 +116,7 @@ mod tests {
         assert_eq!(tr("not a label"), "not a label");
         assert_eq!(tr_fmt("Undo {action}", &[("action", "ペースト")]), "ペーストを元に戻す");
         assert_eq!(tr_grid("1/16 note dotted"), "16分音符 付点");
+        assert_eq!(tr_lane("send A level"), "センド A レベル");
+        assert_eq!(tr_lane("volume"), "音量");
     }
 }

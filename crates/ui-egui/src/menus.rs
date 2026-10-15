@@ -266,11 +266,7 @@ pub fn menu_bar(app: &mut SoundApp, ui: &mut egui::Ui) {
                     "{}{}  —  {}",
                     app.engine.session().name,
                     if app.engine.is_dirty() { " *" } else { "" },
-                    if app.ui.window == MainWindow::Edit || app.ui.mix_separate {
-                        crate::l10n::tr("Edit")
-                    } else {
-                        crate::l10n::tr("Mix")
-                    }
+                    if app.ui.window == MainWindow::Edit || app.ui.mix_separate { crate::l10n::tr("Edit") } else { crate::l10n::tr("Mix") }
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(egui::RichText::new(title).color(t.text_dim));

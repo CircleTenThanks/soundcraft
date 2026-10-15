@@ -55,12 +55,8 @@ fn edit_modes(app: &mut SoundApp, ui: &mut Ui) {
         (EditMode::Slip, 0, 1, "SLIP", "F2"),
         (EditMode::Grid, 1, 1, "GRID", "F4"),
     ];
-    let widest = modes
-        .iter()
-        .map(|m| m.3)
-        .chain(["REL GRID"])
-        .map(|l| ui.painter().layout_no_wrap(tr(l), bold(10.5), t.text).size().x)
-        .fold(0.0, f32::max);
+    let widest =
+        modes.iter().map(|m| m.3).chain(["REL GRID"]).map(|l| ui.painter().layout_no_wrap(tr(l), bold(10.5), t.text).size().x).fold(0.0, f32::max);
     group(ui, 2.0 * widest + 44.0, 52.0, |ui, r| {
         let inner = r.shrink(6.0);
         let cw = inner.width() / 2.0;
@@ -87,10 +83,7 @@ fn edit_modes(app: &mut SoundApp, ui: &mut Ui) {
             resp.on_hover_text(match m {
                 EditMode::Shuffle if locked => tr_fmt("Shuffle is locked ({cmd}-click to unlock)", &[("cmd", &cmd)]),
                 EditMode::Shuffle => tr_fmt("Shuffle mode ({fkey}); {cmd}-click locks it out", &[("fkey", fkey), ("cmd", &cmd)]),
-                EditMode::Grid => tr_fmt(
-                    "Grid mode ({fkey}; again for Relative); Shift-click: Snap to Grid in the other modes",
-                    &[("fkey", fkey)],
-                ),
+                EditMode::Grid => tr_fmt("Grid mode ({fkey}; again for Relative); Shift-click: Snap to Grid in the other modes", &[("fkey", fkey)]),
                 _ => tr_fmt(
                     "{mode} mode ({fkey}); Shift-click adds Snap to Grid",
                     &[("mode", &tr(if m == EditMode::Slip { "Slip" } else { "Spot" })), ("fkey", fkey)],
@@ -168,7 +161,8 @@ fn tools(app: &mut SoundApp, ui: &mut Ui) {
             ui.spacing_mut().item_spacing = vec2(2.0, 3.0);
             let row = ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 2.0;
-                if icon_button(ui, vec2(36.0, 26.0), "zoom_toggle", app.engine.session().edit.zoom_toggle.is_some(), &tr("Zoom Toggle (E)")).clicked() {
+                if icon_button(ui, vec2(36.0, 26.0), "zoom_toggle", app.engine.session().edit.zoom_toggle.is_some(), &tr("Zoom Toggle (E)")).clicked()
+                {
                     crate::edit_window::zoom_toggle(app);
                 }
                 for (tool, icon) in [
@@ -212,7 +206,8 @@ fn tools(app: &mut SoundApp, ui: &mut Ui) {
                     }
                 }
                 let focus = e.keyboard_focus == "commands";
-                if crate::widgets::text_toggle(ui, vec2(36.0, 18.0), "a-z", focus, t.accent, &tr("Commands Keyboard Focus (single-key editing)")).clicked()
+                if crate::widgets::text_toggle(ui, vec2(36.0, 18.0), "a-z", focus, t.accent, &tr("Commands Keyboard Focus (single-key editing)"))
+                    .clicked()
                 {
                     let _ = app.run("options.keyboard_focus", json!({}));
                 }
