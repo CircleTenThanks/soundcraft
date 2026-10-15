@@ -726,14 +726,15 @@ mod selector_visual_regressions {
                     output.textures_delta.clear();
                     assert_eq!(ctx.content_rect().size(), vec2(320.0, 640.0));
                     assert_eq!(ctx.pixels_per_point(), scale);
-                    let long = format!("auto {}", mode.label());
-                    let short = if mode == soundcraft_model::AutomationMode::TouchLatch { "t/l" } else { mode.label() };
+                    let mode_ja = crate::l10n::tr(mode.label());
+                    let long = crate::l10n::tr_fmt("auto {mode}", &[("mode", &mode_ja)]);
+                    let short = if mode == soundcraft_model::AutomationMode::TouchLatch { crate::l10n::tr("t/l") } else { mode_ja.clone() };
                     let texts: Vec<_> = output
                         .shapes
                         .iter()
                         .filter_map(|shape| match &shape.shape {
                             egui::Shape::Text(text)
-                                if text.galley.job.text == long || text.galley.job.text == mode.label() || text.galley.job.text == short =>
+                                if text.galley.job.text == long || text.galley.job.text == mode_ja || text.galley.job.text == short =>
                             {
                                 Some(text)
                             }

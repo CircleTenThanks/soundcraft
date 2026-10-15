@@ -23,6 +23,22 @@ fn harness(engine: soundcraft_engine::Engine) -> Harness<'static, SoundApp> {
     h
 }
 
+fn shown_category(category: impl std::fmt::Debug) -> String {
+    match format!("{category:?}").as_str() {
+        "Eq" => "EQ".into(),
+        "PitchShift" => "ピッチシフト".into(),
+        "Dither" => "ディザー".into(),
+        "Dynamics" => "ダイナミクス".into(),
+        "Reverb" => "リバーブ".into(),
+        "Delay" => "ディレイ".into(),
+        "Modulation" => "モジュレーション".into(),
+        "Harmonic" => "ハーモニック".into(),
+        "Instrument" => "音源".into(),
+        "Other" => "その他".into(),
+        other => other.to_string(),
+    }
+}
+
 fn open(h: &mut Harness<SoundApp>, label: &str) {
     h.get_by_label(label).click();
     h.run_steps(3);
@@ -57,7 +73,7 @@ fn an_insert_menu_searches_as_soon_as_it_opens() {
     let reverbs = built_in(false, "reverb");
     assert!(reverbs.len() >= 2, "the test needs two built-in reverbs");
     let mut h = harness(vox());
-    open(&mut h, "Insert A");
+    open(&mut h, "インサート A");
     type_text(&mut h, "reverb");
     assert!(h.query_by_label(reverbs[0].name).is_some(), "typing went to the search");
     assert!(h.query_by_label_contains("Dynamics").is_none(), "the matches replace the categories");
@@ -77,16 +93,16 @@ fn an_insert_menu_searches_as_soon_as_it_opens() {
 #[test]
 fn a_menu_opens_with_an_empty_search() {
     let mut h = harness(vox());
-    open(&mut h, "Insert B");
+    open(&mut h, "インサート B");
     type_text(&mut h, "reverb");
     press(&mut h, Key::Escape);
     assert!(h.query_by_label(built_in(false, "reverb")[0].name).is_none(), "Escape closes the menu");
 
-    open(&mut h, "Insert B");
-    let category = format!("{:?}", soundcraft_dsp::plugins().iter().find(|p| !p.is_instrument).unwrap().category);
+    open(&mut h, "インサート B");
+    let category = shown_category(soundcraft_dsp::plugins().iter().find(|p| !p.is_instrument).unwrap().category);
     assert!(h.query_by_label_contains(&category).is_some(), "the old search is gone, so the categories show");
     type_text(&mut h, "zzzz");
-    assert!(h.query_by_label("No matches").is_some());
+    assert!(h.query_by_label("該当なし").is_some());
     press(&mut h, Key::Enter);
     assert!(h.state().engine.session().tracks[0].mixer.inserts.iter().all(Option::is_none), "Enter without a match picks nothing");
 }
@@ -95,10 +111,10 @@ fn a_menu_opens_with_an_empty_search() {
 fn picks_without_the_search_still_close_the_menu() {
     let first = soundcraft_dsp::plugins().iter().find(|p| !p.is_instrument).unwrap();
     let other = soundcraft_dsp::plugins().iter().find(|p| p.category == first.category && p.id != first.id).unwrap();
-    let category = format!("{:?} ⏵", first.category);
+    let category = format!("{} ⏵", shown_category(first.category));
     let mut h = harness(vox());
     for (plugin, click) in [(first, egui::PointerButton::Primary), (other, egui::PointerButton::Secondary)] {
-        h.get_by_label("Insert C").click_button(click);
+        h.get_by_label("インサート C").click_button(click);
         h.run_steps(3);
         h.get_by_label(&category).hover();
         h.run_steps(3);
@@ -108,8 +124,8 @@ fn picks_without_the_search_still_close_the_menu() {
         assert!(h.query_by_label(&category).is_none(), "a plugin from a category closes the menu");
     }
 
-    for (item, bypassed) in [("Bypass", Some(true)), ("no insert", None)] {
-        h.get_by_label("Insert C").click_secondary();
+    for (item, bypassed) in [("バイパス", Some(true)), ("インサートなし", None)] {
+        h.get_by_label("インサート C").click_secondary();
         h.run_steps(3);
         h.get_by_label(item).click();
         h.run_steps(3);
@@ -127,7 +143,7 @@ fn an_instrument_menu_searches_as_soon_as_it_opens() {
     let mut h = harness(engine);
     h.state_mut().ui.mix_views.push("instruments".into());
     h.run_steps(2);
-    open(&mut h, "Instrument");
+    open(&mut h, "音源");
     type_text(&mut h, "drum");
     press(&mut h, Key::Enter);
     let instrument = h.state().engine.session().tracks[0].instrument.clone().unwrap();
@@ -145,14 +161,14 @@ fn send_and_output_menus_search_buses_as_soon_as_they_open() {
     let mut h = harness(engine);
     let bus = |h: &Harness<SoundApp>, name: &str| h.state().engine.session().busses.iter().find(|b| b.name == name).unwrap().id;
 
-    open(&mut h, "Send C");
+    open(&mut h, "センド C");
     type_text(&mut h, "del");
     assert!(h.query_by_label("Verb").is_none());
     press(&mut h, Key::Enter);
     let send = h.state().engine.session().tracks[0].mixer.sends[2].clone().expect("Enter picks the bus");
     assert_eq!(send.target, Route::Bus(bus(&h, "Delay")));
 
-    open(&mut h, "Output");
+    open(&mut h, "出力");
     type_text(&mut h, "ver");
     press(&mut h, Key::Enter);
     assert_eq!(h.state().engine.session().tracks[0].mixer.output, Route::Bus(bus(&h, "Verb")));
@@ -163,7 +179,7 @@ fn scripted_keys_reach_the_search_with_the_window_in_the_background() {
     let plates = built_in(false, "plate");
     let mut h = harness(vox());
     h.input_mut().focused = false;
-    open(&mut h, "Insert A");
+    open(&mut h, "インサート A");
     type_text(&mut h, "plate");
     press(&mut h, Key::Enter);
     let insert = h.state().engine.session().tracks[0].mixer.inserts[0].clone().expect("Enter works without window focus, as typing does");
