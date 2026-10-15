@@ -114,7 +114,7 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
         }
         _ => TICKS_PER_QUARTER / 4,
     };
-    // Header toolbar: whole-clip MIDI operations.
+    // ヘッダの MIDI 操作。ノート選択があればその範囲だけに掛ける。
     let bar = Rect::from_min_max(pos2(header.max.x - 330.0, header.min.y + 1.0), pos2(header.max.x - 6.0, header.max.y - 1.0));
     let mut tb = ui.new_child(egui::UiBuilder::new().max_rect(bar).layout(egui::Layout::right_to_left(egui::Align::Center)));
     tb.spacing_mut().item_spacing.x = 4.0;
@@ -133,7 +133,12 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
     }
     if let Some((id, mut p)) = op {
         p["clips"] = json!([cid.0]);
+        if !app.midi.selected.is_empty() {
+            p["indices"] = json!(app.midi.selected);
+        }
         let _ = app.run(id, p);
+        // sort で並びが変わるので、古い index を残さない
+        app.midi.selected.clear();
     }
     let s = app.engine.session_arc();
     let sr = s.sample_rate;

@@ -619,8 +619,18 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
         action = None;
     }
     let saving = action.as_ref().is_some_and(|(cmd, _)| cmd.starts_with("session.save"));
-    if let Some((cmd, params)) = action {
+    if let Some((cmd, mut params)) = action {
         keep = false;
+        // MIDI エディタでノート選択があるときは、Event の MIDI 操作をその範囲に限定する
+        if matches!(cmd.as_str(), "event.quantize" | "event.transpose" | "event.change_velocity" | "event.change_duration")
+            && !app.midi.selected.is_empty()
+        {
+            params["indices"] = json!(app.midi.selected);
+            if let Some(cid) = crate::midi_editor::target_clip(app) {
+                params["clips"] = json!([cid.0]);
+            }
+            app.midi.selected.clear();
+        }
         match app.run(&cmd, params) {
             Ok(v) if cmd == "file.export_clips" => {
                 app.ui.status =
