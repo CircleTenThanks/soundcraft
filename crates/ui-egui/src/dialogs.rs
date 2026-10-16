@@ -22,6 +22,8 @@ pub enum Dialog {
     Number { cmd: String, title: String, key: String, value: f64, suffix: String },
     // Event > Quantize…。グリッド・強さ・スウィングを一度に指定する。
     Quantize { grid: String, strength: f64, swing: f64 },
+    // Event > Shape Velocity…。全体の強さと強弱の差。
+    ShapeVelocity { strength: f64, contrast: f64 },
     TempoChange { at: Samples, bpm: f64 }, // from double-clicking the tempo ruler
     Spot(crate::spot::Spot),
     Fades { shape: String },
@@ -52,6 +54,7 @@ impl Dialogs {
             Dialog::PathPrompt { .. } => "path",
             Dialog::Number { .. } => "number",
             Dialog::Quantize { .. } => "quantize",
+            Dialog::ShapeVelocity { .. } => "shape_velocity",
             Dialog::TempoChange { .. } => "tempo_change",
             Dialog::Spot(_) => "spot",
             Dialog::Fades { .. } => "fades",
@@ -128,6 +131,7 @@ impl Dialogs {
                 Dialog::Number { cmd: id.into(), title: "Transpose".into(), key: "semitones".into(), value: 12.0, suffix: "semitones".into() }
             }
             "event.quantize" => Dialog::Quantize { grid: "1/16".into(), strength: 100.0, swing: 0.0 },
+            "event.shape_velocity" => Dialog::ShapeVelocity { strength: 100.0, contrast: 100.0 },
             "edit.fades_create" => Dialog::Fades { shape: "equal power".into() },
             "edit.strip_silence" => Dialog::StripSilence { threshold: -48.0, min_ms: 50.0, pre_ms: 5.0, post_ms: 20.0 },
             "track.group" => {
@@ -285,6 +289,7 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
         Dialog::ClearClips { .. } => "Clear",
         Dialog::PathPrompt { title, .. } | Dialog::Number { title, .. } => title.as_str(),
         Dialog::Quantize { .. } => "Quantize...",
+        Dialog::ShapeVelocity { .. } => "Shape Velocity...",
         Dialog::TempoChange { .. } => "Tempo Change (BPM)",
         Dialog::Spot(_) => "Spot",
         Dialog::Fades { .. } => "Fades",
@@ -493,6 +498,18 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
                         action = Some(("event.quantize".into(), json!({"grid": grid, "strength": strength, "swing": swing})));
                     }
                 }
+                Dialog::ShapeVelocity { strength, contrast } => {
+                    ui.add(egui::Slider::new(strength, 1.0..=127.0).text(tr("Strength")));
+                    ui.add(egui::Slider::new(contrast, 0.0..=100.0).text(tr("Contrast")));
+                    ui.label(
+                        egui::RichText::new(tr("Shapes velocity from beat, chord, contour, and phrase (no randomness)."))
+                            .small()
+                            .color(Tokens::current().text_dim),
+                    );
+                    if buttons(ui, "OK", enter) {
+                        action = Some(("event.shape_velocity".into(), json!({"strength": strength, "contrast": contrast})));
+                    }
+                }
                 Dialog::TempoChange { at, bpm } => {
                     ui.horizontal(|ui| {
                         // Same limits the engine enforces (time crate `valid_bpm`).
@@ -636,7 +653,7 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
     if let Some((cmd, mut params)) = action {
         keep = false;
         // MIDI エディタでノート選択があるときは、Event の MIDI 操作をその範囲に限定する
-        if matches!(cmd.as_str(), "event.quantize" | "event.transpose" | "event.change_velocity" | "event.change_duration")
+        if matches!(cmd.as_str(), "event.quantize" | "event.transpose" | "event.change_velocity" | "event.shape_velocity" | "event.change_duration")
             && !app.midi.selected.is_empty()
         {
             params["indices"] = json!(app.midi.selected);
