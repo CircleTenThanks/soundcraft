@@ -115,12 +115,18 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
         _ => TICKS_PER_QUARTER / 4,
     };
     // ヘッダの MIDI 操作。ノート選択があればその範囲だけに掛ける。
-    let bar = Rect::from_min_max(pos2(header.max.x - 330.0, header.min.y + 1.0), pos2(header.max.x - 6.0, header.max.y - 1.0));
+    let bar = Rect::from_min_max(pos2(header.max.x - 400.0, header.min.y + 1.0), pos2(header.max.x - 6.0, header.max.y - 1.0));
     let mut tb = ui.new_child(egui::UiBuilder::new().max_rect(bar).layout(egui::Layout::right_to_left(egui::Align::Center)));
     tb.spacing_mut().item_spacing.x = 4.0;
     let mut op: Option<(&str, serde_json::Value)> = None;
     if tb.small_button("Legato").clicked() {
         op = Some(("event.change_duration", json!({"legato": 0})));
+    }
+    if tb.small_button("Sustain").on_hover_text("Auto sustain pedal at chord changes").clicked() {
+        op = Some(("event.auto_sustain", json!({})));
+    }
+    if tb.small_button("Shape Vel").on_hover_text("Shape velocity from beat, chord, contour, and phrase").clicked() {
+        op = Some(("event.shape_velocity", json!({"strength": 100, "contrast": 100})));
     }
     if tb.small_button("Vel −10").clicked() {
         op = Some(("event.change_velocity", json!({"add": -10})));

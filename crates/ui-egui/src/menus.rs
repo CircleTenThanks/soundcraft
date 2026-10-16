@@ -163,6 +163,8 @@ const DIALOG_COMMANDS: &[&str] = &[
     "edit.fades_create",
     "setup.session",
     "event.quantize",
+    "event.shape_velocity",
+    "event.auto_sustain",
     "event.transpose",
     "edit.strip_silence",
     "clip.rename",

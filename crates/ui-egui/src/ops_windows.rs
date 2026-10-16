@@ -26,6 +26,9 @@ pub struct OpsState {
     pub quant_swing: f64,
     pub transpose: i64,
     pub velocity_add: i64,
+    pub shape_strength: i64,
+    pub shape_contrast: i64,
+    pub sustain_gap_ticks: i64,
     pub rtp_velocity: i64,
     pub rtp_transpose: i64,
     pub rtp_duration: f64,
@@ -53,6 +56,9 @@ impl Default for OpsState {
             quant_swing: 0.0,
             transpose: 12,
             velocity_add: 10,
+            shape_strength: 100,
+            shape_contrast: 100,
+            sustain_gap_ticks: (soundcraft_midi::PPQ / 32) as i64,
             rtp_velocity: 0,
             rtp_transpose: 0,
             rtp_duration: 100.0,
@@ -217,7 +223,7 @@ fn midi_ops(app: &mut SoundApp, ctx: &egui::Context) {
     }
     egui::Window::new("MIDI Operations").open(&mut open).default_size(vec2(360.0, 220.0)).show(ctx, |ui| {
         egui::ComboBox::from_label("Operation").selected_text(app.ops.midi_op.clone()).show_ui(ui, |ui| {
-            for c in ["quantize", "transpose", "change velocity", "flatten performance", "restore performance"] {
+            for c in ["quantize", "transpose", "change velocity", "shape velocity", "auto sustain", "flatten performance", "restore performance"] {
                 ui.selectable_value(&mut app.ops.midi_op, c.to_string(), c);
             }
         });
@@ -236,6 +242,13 @@ fn midi_ops(app: &mut SoundApp, ctx: &egui::Context) {
             }
             "change velocity" => {
                 ui.add(egui::Slider::new(&mut app.ops.velocity_add, -127..=127).text("Add"));
+            }
+            "shape velocity" => {
+                ui.add(egui::Slider::new(&mut app.ops.shape_strength, 1..=127).text("Strength"));
+                ui.add(egui::Slider::new(&mut app.ops.shape_contrast, 0..=100).text("Contrast"));
+            }
+            "auto sustain" => {
+                ui.add(egui::Slider::new(&mut app.ops.sustain_gap_ticks, 1..=480).text("Gap ticks"));
             }
             _ => {}
         }
@@ -264,6 +277,10 @@ fn midi_ops(app: &mut SoundApp, ctx: &egui::Context) {
                 ),
                 "transpose" => app.run("event.transpose", with_notes(json!({"semitones": app.ops.transpose}))),
                 "change velocity" => app.run("event.change_velocity", with_notes(json!({"add": app.ops.velocity_add}))),
+                "shape velocity" => {
+                    app.run("event.shape_velocity", with_notes(json!({"strength": app.ops.shape_strength, "contrast": app.ops.shape_contrast})))
+                }
+                "auto sustain" => app.run("event.auto_sustain", with_notes(json!({"gap_ticks": app.ops.sustain_gap_ticks}))),
                 "flatten performance" => app.run("event.flatten_performance", json!({})),
                 _ => app.run("event.restore_performance", json!({})),
             };
