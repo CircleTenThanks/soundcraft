@@ -436,6 +436,7 @@ pub static JA: &[(&str, &str)] = &[
     ("New Playlist", "新しいプレイリスト"),
     ("New Session", "新規セッション"),
     ("New Tracks", "新規トラック"),
+    ("New Tracks…", "新規トラック…"),
     ("New Workspace", "新しいワークスペース"),
     ("New...", "新規..."),
     ("Next", "次へ"),

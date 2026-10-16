@@ -1,7 +1,7 @@
-//! New Tracks opens from the Tracks list's + button, and from a double-click below the last
-//! track (Edit) or right of the last strip (Mix).
+//! New Tracks opens from the Tracks list's + button, and from a double-click or right-click
+//! below the last track (Edit) or right of the last strip (Mix).
 
-use egui::{Pos2, pos2, vec2};
+use egui::{Event, Modifiers, PointerButton, Pos2, pos2, vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use soundcraft_ui_egui::{MainWindow, Services, SoundApp};
@@ -64,4 +64,30 @@ fn double_click_right_of_the_last_strip_opens_new_tracks() {
     click(&mut h, at);
     click(&mut h, at);
     assert_eq!(h.state().dialogs.open_name(), Some("new_tracks"));
+}
+
+fn right_click(h: &mut Harness<SoundApp>, at: Pos2) {
+    h.hover_at(at);
+    for pressed in [true, false] {
+        h.event(Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed, modifiers: Modifiers::NONE });
+    }
+    h.run_steps(3);
+}
+
+#[test]
+fn right_click_below_the_last_track_offers_new_tracks() {
+    let mut h = harness(2);
+    let rows = h.state().edit_layout.rows.clone();
+    let below = rows[1].1[3] + 60.0;
+    // ヘッダ列側の空きと、タイムライン側の空きの両方。
+    for x in [rows[0].1[0] + 60.0, h.state().edit_layout.timeline[0] + 100.0] {
+        right_click(&mut h, pos2(x, below));
+        assert!(h.query_by_label("新規トラック…").is_some(), "empty-area context menu at x={x}");
+        h.get_by_label("新規トラック…").click();
+        h.run_steps(2);
+        assert_eq!(h.state().dialogs.open_name(), Some("new_tracks"));
+        h.state_mut().dialogs.open = None;
+        h.key_press(egui::Key::Escape);
+        h.run_steps(2);
+    }
 }

@@ -264,10 +264,11 @@ fn main_area_content(app: &mut SoundApp, ui: &mut Ui) {
             track_row(app, &mut child, TrackId(id), row, tl, &cols);
         }
     }
-    // Below the tracks a click clears the selection and a double-click opens New Tracks.
+    // トラック下（ヘッダ列を含む空き）。クリックで選択解除、ダブルクリックと右クリックで新規トラック。
     let empty = Rect::from_min_max(pos2(full.min.x, y.max(tl.min.y)), tl.max);
     if empty.height() > 4.0 {
         let resp = ui.interact(empty, ui.id().with("empty"), Sense::click());
+        resp.context_menu(|ui| empty_tracks_context_menu(app, ui));
         if resp.double_clicked() {
             let _ = app.dialogs.open_for_command(&app.engine, "track.new");
         } else if resp.clicked() {
@@ -1413,6 +1414,14 @@ fn view_menu(app: &mut SoundApp, ui: &mut Ui, track: &Track) {
                 }
             }
         });
+    }
+}
+
+/// トラック一覧の下など、空き領域の右クリックメニュー。
+fn empty_tracks_context_menu(app: &mut SoundApp, ui: &mut Ui) {
+    if ui.button(tr("New Tracks…")).clicked() {
+        let _ = app.dialogs.open_for_command(&app.engine, "track.new");
+        ui.close();
     }
 }
 
