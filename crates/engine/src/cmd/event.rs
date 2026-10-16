@@ -30,20 +30,28 @@ pub fn specs() -> Vec<CommandSpec> {
             "Quantize...",
             ["Event", "MIDI Operations"],
             Some("Alt+0"),
-            "{grid?: 1/16 | ticks, strength?: 100, swing?: 0, clips?}",
+            "{grid?: 1/16 | ticks, strength?: 100, swing?: 0, clips?, indices?}",
             has_selection,
             quantize
         ),
-        cmd!("event.transpose", "Transpose...", ["Event", "MIDI Operations"], Some("Alt+T"), "{semitones, clips?}", has_selection, |e, p| {
-            let st = i64_or(p, "semitones", 0).clamp(-127, 127) as i32;
-            midi_op(e, p, move |n| soundcraft_midi::ops::transpose(n, st))
-        }),
+        cmd!(
+            "event.transpose",
+            "Transpose...",
+            ["Event", "MIDI Operations"],
+            Some("Alt+T"),
+            "{semitones, clips?, indices?}",
+            has_selection,
+            |e, p| {
+                let st = i64_or(p, "semitones", 0).clamp(-127, 127) as i32;
+                midi_op(e, p, move |n| soundcraft_midi::ops::transpose(n, st))
+            }
+        ),
         cmd!(
             "event.change_velocity",
             "Change Velocity...",
             ["Event", "MIDI Operations"],
             None,
-            "{set?|add?|scale?|min?,max?, clips?}",
+            "{set?|add?|scale?|min?,max?, clips?, indices?}",
             has_selection,
             velocity
         ),
@@ -52,7 +60,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Change Duration...",
             ["Event", "MIDI Operations"],
             Some("Alt+P"),
-            "{set?|add?|scale?|legato?: gap, clips?}",
+            "{set?|add?|scale?|legato?: gap, clips?, indices?}",
             has_selection,
             duration
         ),
@@ -195,7 +203,13 @@ fn cut_time(e: &mut Engine, p: &Value) -> Result<Value> {
     Ok(json!({"removed": r.len()}))
 }
 
+/// `indices` があればそのノートだけに掛ける。無ければクリップ内の全ノート。
+fn note_indices(p: &Value) -> Vec<usize> {
+    p.get("indices").and_then(Value::as_array).map(|a| a.iter().filter_map(|v| v.as_u64().map(|x| x as usize)).collect()).unwrap_or_default()
+}
+
 fn midi_op(e: &mut Engine, p: &Value, f: impl Fn(&mut [soundcraft_midi::Note])) -> Result<Value> {
+    let idx = note_indices(p);
     let ids = clip_ids_param(e, p);
     let s = e.session_mut();
     let mut n = 0;
@@ -203,9 +217,26 @@ fn midi_op(e: &mut Engine, p: &Value, f: impl Fn(&mut [soundcraft_midi::Note])) 
         if let Some(c) = s.find_clip_mut(id)
             && let ClipContent::Midi { sequence } = &mut c.content
         {
-            f(&mut sequence.notes);
-            sequence.sort();
-            n += sequence.notes.len();
+            if idx.is_empty() {
+                let len = sequence.notes.len();
+                f(&mut sequence.notes);
+                sequence.sort();
+                n += len;
+            } else {
+                let mut order: Vec<usize> = idx.iter().copied().filter(|&i| i < sequence.notes.len()).collect();
+                order.sort_unstable();
+                order.dedup();
+                if order.is_empty() {
+                    continue;
+                }
+                let mut subset: Vec<_> = order.iter().map(|&i| sequence.notes[i]).collect();
+                f(&mut subset);
+                for (&i, note) in order.iter().zip(&subset) {
+                    sequence.notes[i] = *note;
+                }
+                n += order.len();
+                sequence.sort();
+            }
         }
     }
     Ok(json!({"notes": n}))
@@ -460,5 +491,34 @@ mod tests {
         assert_eq!(tempo.tempo_at_tick(mid), 90.0, "the interior change is replaced");
         assert_eq!(tempo.tempo_at_tick(t1), after, "the old tempo resumes at the end");
         assert_eq!(after, 140.0);
+    }
+
+    /// `indices` があるとき、MIDI 操作はクリップ全体ではなくそのノートだけに掛かる。
+    #[test]
+    fn midi_ops_honour_note_indices() {
+        use soundcraft_model::{ChannelFormat, TrackKind};
+        let mut e = crate::Engine::default();
+        let t = e.session_mut().add_track(TrackKind::Instrument, ChannelFormat::Stereo, Some("Keys"));
+        let clip = e.execute("midi.new_clip", &json!({"track": t.0})).unwrap()["clip"].as_u64().unwrap();
+        e.execute("midi.note_add", &json!({"clip": clip, "pitch": 60, "start_ticks": 0, "velocity": 80})).unwrap();
+        e.execute("midi.note_add", &json!({"clip": clip, "pitch": 64, "start_ticks": 480, "velocity": 80})).unwrap();
+
+        let r = e.execute("event.change_velocity", &json!({"clips": [clip], "indices": [0], "add": 10})).unwrap();
+        assert_eq!(r["notes"], 1);
+        let notes = e.execute("midi.notes", &json!({"clip": clip})).unwrap();
+        assert_eq!(notes["notes"][0]["velocity"], 90);
+        assert_eq!(notes["notes"][1]["velocity"], 80);
+
+        e.execute("event.transpose", &json!({"clips": [clip], "indices": [1], "semitones": 2})).unwrap();
+        let notes = e.execute("midi.notes", &json!({"clip": clip})).unwrap();
+        assert_eq!(notes["notes"][0]["pitch"], 60);
+        assert_eq!(notes["notes"][1]["pitch"], 66);
+
+        let before0 = notes["notes"][0]["length"].as_i64().unwrap();
+        let before1 = notes["notes"][1]["length"].as_i64().unwrap();
+        e.execute("event.change_duration", &json!({"clips": [clip], "indices": [0], "add": 120})).unwrap();
+        let notes = e.execute("midi.notes", &json!({"clip": clip})).unwrap();
+        assert_eq!(notes["notes"][0]["length"], before0 + 120);
+        assert_eq!(notes["notes"][1]["length"], before1);
     }
 }

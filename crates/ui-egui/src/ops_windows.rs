@@ -239,17 +239,37 @@ fn midi_ops(app: &mut SoundApp, ctx: &egui::Context) {
             }
             _ => {}
         }
-        ui.label(egui::RichText::new("Applies to the selected MIDI clips (or those under the selection).").small());
+        ui.label(
+            egui::RichText::new("Applies to selected MIDI notes when the MIDI Editor has a selection; otherwise to selected MIDI clips.").small(),
+        );
         if ui.button(egui::RichText::new("Apply").strong()).clicked() {
-            let r = match app.ops.midi_op.as_str() {
-                "quantize" => {
-                    app.run("event.quantize", json!({"grid": app.ops.quant_grid, "strength": app.ops.quant_strength, "swing": app.ops.quant_swing}))
+            let note_sel = !app.midi.selected.is_empty();
+            let with_notes = |mut p: serde_json::Value| {
+                if note_sel {
+                    p["indices"] = json!(app.midi.selected);
+                    if let Some(cid) = crate::midi_editor::target_clip(app) {
+                        p["clips"] = json!([cid.0]);
+                    }
                 }
-                "transpose" => app.run("event.transpose", json!({"semitones": app.ops.transpose})),
-                "change velocity" => app.run("event.change_velocity", json!({"add": app.ops.velocity_add})),
+                p
+            };
+            let r = match app.ops.midi_op.as_str() {
+                "quantize" => app.run(
+                    "event.quantize",
+                    with_notes(json!({
+                        "grid": app.ops.quant_grid,
+                        "strength": app.ops.quant_strength,
+                        "swing": app.ops.quant_swing
+                    })),
+                ),
+                "transpose" => app.run("event.transpose", with_notes(json!({"semitones": app.ops.transpose}))),
+                "change velocity" => app.run("event.change_velocity", with_notes(json!({"add": app.ops.velocity_add}))),
                 "flatten performance" => app.run("event.flatten_performance", json!({})),
                 _ => app.run("event.restore_performance", json!({})),
             };
+            if note_sel {
+                app.midi.selected.clear();
+            }
             result_line(ui, &r);
         }
     });

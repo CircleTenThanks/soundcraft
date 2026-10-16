@@ -20,6 +20,8 @@ pub enum Dialog {
     ClearClips { clips: Vec<ClipId>, sources: Vec<SourceId>, message: String },
     PathPrompt { cmd: String, title: String, path: String, key: String },
     Number { cmd: String, title: String, key: String, value: f64, suffix: String },
+    // Event > Quantize…。グリッド・強さ・スウィングを一度に指定する。
+    Quantize { grid: String, strength: f64, swing: f64 },
     TempoChange { at: Samples, bpm: f64 }, // from double-clicking the tempo ruler
     Spot(crate::spot::Spot),
     Fades { shape: String },
@@ -49,6 +51,7 @@ impl Dialogs {
             Dialog::ClearClips { .. } => "clear_clips",
             Dialog::PathPrompt { .. } => "path",
             Dialog::Number { .. } => "number",
+            Dialog::Quantize { .. } => "quantize",
             Dialog::TempoChange { .. } => "tempo_change",
             Dialog::Spot(_) => "spot",
             Dialog::Fades { .. } => "fades",
@@ -124,9 +127,7 @@ impl Dialogs {
             "event.transpose" => {
                 Dialog::Number { cmd: id.into(), title: "Transpose".into(), key: "semitones".into(), value: 12.0, suffix: "semitones".into() }
             }
-            "event.quantize" => {
-                Dialog::Number { cmd: id.into(), title: "Quantize strength".into(), key: "strength".into(), value: 100.0, suffix: "%".into() }
-            }
+            "event.quantize" => Dialog::Quantize { grid: "1/16".into(), strength: 100.0, swing: 0.0 },
             "edit.fades_create" => Dialog::Fades { shape: "equal power".into() },
             "edit.strip_silence" => Dialog::StripSilence { threshold: -48.0, min_ms: 50.0, pre_ms: 5.0, post_ms: 20.0 },
             "track.group" => {
@@ -283,6 +284,7 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
         Dialog::RenameMarker { .. } => "Rename Marker",
         Dialog::ClearClips { .. } => "Clear",
         Dialog::PathPrompt { title, .. } | Dialog::Number { title, .. } => title.as_str(),
+        Dialog::Quantize { .. } => "Quantize...",
         Dialog::TempoChange { .. } => "Tempo Change (BPM)",
         Dialog::Spot(_) => "Spot",
         Dialog::Fades { .. } => "Fades",
@@ -479,6 +481,18 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
                         action = Some((cmd.clone(), v));
                     }
                 }
+                Dialog::Quantize { grid, strength, swing } => {
+                    egui::ComboBox::from_label(tr("Grid")).selected_text(tr(grid.as_str())).show_ui(ui, |ui| {
+                        for g in ["1/4", "1/8", "1/8t", "1/16", "1/16t", "1/32"] {
+                            ui.selectable_value(grid, g.to_string(), tr(g));
+                        }
+                    });
+                    ui.add(egui::Slider::new(strength, 0.0..=100.0).text(tr("Strength %")));
+                    ui.add(egui::Slider::new(swing, 0.0..=100.0).text(tr("Swing %")));
+                    if buttons(ui, "OK", enter) {
+                        action = Some(("event.quantize".into(), json!({"grid": grid, "strength": strength, "swing": swing})));
+                    }
+                }
                 Dialog::TempoChange { at, bpm } => {
                     ui.horizontal(|ui| {
                         // Same limits the engine enforces (time crate `valid_bpm`).
@@ -619,8 +633,18 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
         action = None;
     }
     let saving = action.as_ref().is_some_and(|(cmd, _)| cmd.starts_with("session.save"));
-    if let Some((cmd, params)) = action {
+    if let Some((cmd, mut params)) = action {
         keep = false;
+        // MIDI エディタでノート選択があるときは、Event の MIDI 操作をその範囲に限定する
+        if matches!(cmd.as_str(), "event.quantize" | "event.transpose" | "event.change_velocity" | "event.change_duration")
+            && !app.midi.selected.is_empty()
+        {
+            params["indices"] = json!(app.midi.selected);
+            if let Some(cid) = crate::midi_editor::target_clip(app) {
+                params["clips"] = json!([cid.0]);
+            }
+            app.midi.selected.clear();
+        }
         match app.run(&cmd, params) {
             Ok(v) if cmd == "file.export_clips" => {
                 app.ui.status =
@@ -770,6 +794,23 @@ mod tests {
         assert!(soundcraft_engine::command_specs().iter().any(|c| c.id == cmd), "{cmd} is not a command");
         assert_eq!(params["at"], 96_000);
         assert_eq!(params["bpm"], 133.5);
+    }
+
+    /// Quantize… は強さだけでなく、グリッドとスウィングも聞く。
+    #[test]
+    fn quantize_dialog_asks_for_grid_strength_and_swing() {
+        let e = soundcraft_engine::demo::demo_engine();
+        let mut d = Dialogs::default();
+        assert!(d.open_for_command(&e, "event.quantize"));
+        assert_eq!(d.open_name(), Some("quantize"));
+        match d.open.take() {
+            Some(Dialog::Quantize { grid, strength, swing }) => {
+                assert_eq!(grid, "1/16");
+                assert_eq!(strength, 100.0);
+                assert_eq!(swing, 0.0);
+            }
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]
