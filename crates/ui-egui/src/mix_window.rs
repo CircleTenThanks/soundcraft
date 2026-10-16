@@ -670,15 +670,53 @@ pub fn plugin_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId, slot: usize, oc
     }
 }
 
+/// 新規インストゥルメント追加の続きで、音源を選んだあとに設定画面を開いてキューを進めるか。
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum InstrumentPickFollowUp {
+    None,
+    OpenSettingsAndAdvance,
+}
+
+/// New Tracks でインストゥルメントを作ったあと、音源一覧 → 設定画面へつなぐ窓。
+pub fn instrument_add_flow(app: &mut SoundApp, ctx: &egui::Context) {
+    let Some(&tid) = app.ui.instrument_add.first() else {
+        return;
+    };
+    if !app.engine.session().track(tid).is_some_and(|t| t.kind == TrackKind::Instrument) {
+        app.ui.instrument_add.remove(0);
+        return;
+    }
+    let esc = ctx.input(|i| i.key_pressed(egui::Key::Escape));
+    let mut open = true;
+    egui::Window::new(egui::RichText::new(tr("Choose Instrument")).font(bold(13.0)))
+        .id(egui::Id::new("instrument_add"))
+        .collapsible(false)
+        .resizable(true)
+        .default_width(280.0)
+        .anchor(Align2::CENTER_CENTER, vec2(0.0, -40.0))
+        .open(&mut open)
+        .show(ctx, |ui| {
+            instrument_menu_ex(app, ui, tid, InstrumentPickFollowUp::OpenSettingsAndAdvance);
+        });
+    // 選んでキューが進んだあとに窓が閉じても、残りは次フレームで出す。×や Esc だけ全体をやめる。
+    if esc || (!open && app.ui.instrument_add.first() == Some(&tid)) {
+        app.ui.instrument_add.clear();
+    }
+}
+
 /// The instrument picker of an instrument track: a search field that takes typing at once, then
 /// (until something is typed) its instrument's editor and the built-in, CLAP, VST3 and Audio Units
 /// instruments.
 pub fn instrument_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId) {
+    instrument_menu_ex(app, ui, id, InstrumentPickFollowUp::None);
+}
+
+fn instrument_menu_ex(app: &mut SoundApp, ui: &mut Ui, id: TrackId, follow: InstrumentPickFollowUp) {
     let slot = soundcraft_mix::INSTRUMENT_SLOT;
     let search = MenuSearch::show(ui, egui::Id::new(("instrument-search", id.0)), &tr("Search instruments…"));
     if search.typing() {
         if let Some(plugin) = plugin_search(ui, &search, true) {
-            run_pick(app, ui, "mix.instrument", json!({"track": id.0, "plugin": plugin}));
+            run_instrument_pick(app, ui, id, plugin, follow);
         }
         return;
     }
@@ -686,8 +724,9 @@ pub fn instrument_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId) {
     if let Some(info) = current.as_ref().and_then(|i| plugin_info(&i.plugin)) {
         ui.label(egui::RichText::new(tr(info.name)).strong());
         if current.as_ref().is_some_and(|i| !soundcraft_mix::is_third_party(&i.plugin)) && ui.button(tr("Edit Parameters…")).clicked() {
-            if !app.ui.plugin_windows.contains(&(id, slot)) {
-                app.ui.plugin_windows.push((id, slot));
+            open_instrument_settings(app, id);
+            if follow == InstrumentPickFollowUp::OpenSettingsAndAdvance {
+                advance_instrument_add(app, id);
             }
             ui.close();
         }
@@ -702,6 +741,10 @@ pub fn instrument_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId) {
             } else if ui.button(tr("Open Plugin Editor")).clicked() {
                 if let Err(e) = p.open_editor(id, slot) {
                     app.ui.status = format!("{}: {e}", info.name);
+                }
+                if follow == InstrumentPickFollowUp::OpenSettingsAndAdvance {
+                    open_instrument_settings(app, id);
+                    advance_instrument_add(app, id);
                 }
                 ui.close();
             }
@@ -720,7 +763,47 @@ pub fn instrument_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId) {
         picked = Some(p);
     }
     if let Some(plugin) = picked {
-        run_pick(app, ui, "mix.instrument", json!({"track": id.0, "plugin": plugin}));
+        run_instrument_pick(app, ui, id, plugin, follow);
+    }
+}
+
+fn run_instrument_pick(app: &mut SoundApp, ui: &Ui, id: TrackId, plugin: String, follow: InstrumentPickFollowUp) {
+    if let Err(e) = app.run("mix.instrument", json!({"track": id.0, "plugin": plugin})) {
+        app.ui.status = e;
+        ui.close();
+        return;
+    }
+    if follow == InstrumentPickFollowUp::OpenSettingsAndAdvance {
+        open_instrument_settings(app, id);
+        advance_instrument_add(app, id);
+    }
+    ui.close();
+}
+
+fn open_instrument_settings(app: &mut SoundApp, id: TrackId) {
+    let slot = soundcraft_mix::INSTRUMENT_SLOT;
+    if !app.ui.plugin_windows.contains(&(id, slot)) {
+        app.ui.plugin_windows.push((id, slot));
+    }
+    if let Some(p) = &app.player
+        && p.has_editor(id, slot)
+        && let Err(e) = p.open_editor(id, slot)
+    {
+        let name = app
+            .engine
+            .session()
+            .track(id)
+            .and_then(|t| t.instrument.as_ref())
+            .and_then(|i| plugin_info(&i.plugin))
+            .map(|i| i.name)
+            .unwrap_or("instrument");
+        app.ui.status = format!("{name}: {e}");
+    }
+}
+
+fn advance_instrument_add(app: &mut SoundApp, id: TrackId) {
+    if let Some(i) = app.ui.instrument_add.iter().position(|t| *t == id) {
+        app.ui.instrument_add.remove(i);
     }
 }
 

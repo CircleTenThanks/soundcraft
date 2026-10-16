@@ -680,10 +680,19 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
             }
             app.midi.selected.clear();
         }
+        // インストゥルメント作成のあとは音源一覧 → 設定画面へ続ける（番号17）。
+        let pick_instruments = cmd == "track.new" && params.get("kind").and_then(Value::as_str) == Some("instrument");
         match app.run(&cmd, params) {
             Ok(v) if cmd == "file.export_clips" => {
                 app.ui.status =
                     tr_fmt("Exported {n} clip(s) to {dir}", &[("n", &v["written"].to_string()), ("dir", v["dir"].as_str().unwrap_or_default())]);
+            }
+            Ok(v) if pick_instruments => {
+                app.ui.instrument_add = v
+                    .get("tracks")
+                    .and_then(Value::as_array)
+                    .map(|arr| arr.iter().filter_map(|x| x.as_u64().map(TrackId)).collect())
+                    .unwrap_or_default();
             }
             Ok(_) => {}
             Err(e) => app.ui.status = e,

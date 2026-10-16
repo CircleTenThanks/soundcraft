@@ -1,10 +1,12 @@
 //! New Tracks opens from the Tracks list's + button, and from a double-click or right-click
-//! below the last track (Edit) or right of the last strip (Mix).
+//! below the last track (Edit) or right of the last strip (Mix). Instrument Create continues to
+//! the instrument picker and opens the settings window after a pick.
 
+use egui::accesskit::Role;
 use egui::{Event, Modifiers, PointerButton, Pos2, pos2, vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
-use soundcraft_ui_egui::{MainWindow, Services, SoundApp};
+use soundcraft_ui_egui::{MainWindow, Services, SoundApp, dialogs::Dialog};
 
 fn harness(tracks: usize) -> Harness<'static, SoundApp> {
     let mut engine = soundcraft_engine::Engine::default();
@@ -90,4 +92,35 @@ fn right_click_below_the_last_track_offers_new_tracks() {
         h.key_press(egui::Key::Escape);
         h.run_steps(2);
     }
+}
+
+#[test]
+fn creating_an_instrument_track_opens_the_instrument_picker_then_settings() {
+    let mut h = harness(0);
+    h.state_mut().dialogs.open = Some(Dialog::NewTracks {
+        count: 1,
+        format: "Stereo".into(),
+        kind: "instrument".into(),
+        timebase: "ticks".into(),
+        name: "Inst".into(),
+    });
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::Button, "作成").click();
+    h.run_steps(3);
+    assert!(h.state().dialogs.open.is_none());
+    let tid = h.state().engine.session().tracks.last().map(|t| t.id).expect("instrument track");
+    assert_eq!(h.state().ui.instrument_add, vec![tid]);
+    assert!(h.query_by_label("音源を選択").is_some());
+    // 窓内の menu_button はホバーだけでは開かないことがあるのでクリックする。
+    h.get_by_label_contains("内蔵").click();
+    h.run_steps(3);
+    h.get_by_label("Drum Synth").click();
+    h.run_steps(3);
+    assert!(h.state().ui.instrument_add.is_empty());
+    let plugin = h.state().engine.session().track(tid).and_then(|t| t.instrument.as_ref()).map(|i| i.plugin.as_str());
+    assert_eq!(plugin, Some("drum_synth"));
+    assert!(
+        h.state().ui.plugin_windows.contains(&(tid, soundcraft_mix::INSTRUMENT_SLOT)),
+        "settings window opens after the pick"
+    );
 }

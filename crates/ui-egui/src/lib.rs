@@ -82,6 +82,9 @@ pub struct UiState {
     pub track_tint: f32,
     /// Open plugin windows (track, slot).
     pub plugin_windows: Vec<(TrackId, usize)>,
+    /// New Tracks でインストゥルメントを作ったあとの音源選びキュー。先頭から順に一覧を出す。
+    #[serde(skip)]
+    pub instrument_add: Vec<TrackId>,
     /// The send in the Send window (track, slot).
     #[serde(skip)]
     pub send_window: Option<(TrackId, usize)>,
@@ -151,6 +154,7 @@ impl Default for UiState {
             edit_views: vec!["color".into()],
             track_tint: 0.5,
             plugin_windows: Vec::new(),
+            instrument_add: Vec::new(),
             send_window: None,
             audiosuite: None,
             status: String::new(),
@@ -1238,6 +1242,7 @@ impl SoundApp {
         score_editor::show(self, &ctx);
         palette::show(self, &ctx);
         dialogs::show(self, &ctx);
+        mix_window::instrument_add_flow(self, &ctx);
         // Here, not in logic(): a covered or minimized window runs only logic(), with no vsync to pace it.
         if self.meters_live() {
             let hz = if self.ui.window == MainWindow::Mix { 60 } else { 30 };

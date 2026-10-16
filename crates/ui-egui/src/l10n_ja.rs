@@ -134,6 +134,7 @@ pub static JA: &[(&str, &str)] = &[
     ("Change Velocity...", "ベロシティを変更..."),
     ("Channel Name", "チャンネル名"),
     ("Channel Strip", "チャンネルストリップ"),
+    ("Choose Instrument", "音源を選択"),
     ("Chord Symbols", "コード記号"),
     ("Chords", "コード"),
     ("Clear", "消去"),
