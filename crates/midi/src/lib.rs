@@ -7,6 +7,7 @@
 //!   variable-length quantities are bounded and event counts are capped.
 //! - [`ops`]: MIDI editing operations (quantize, transpose, velocity, duration, split).
 //! - [`shape_velocity`][]: 拍・和音・流れ・フレーズからベロシティを付ける（乱数なし）。
+//! - [`VelocityShaper`]: 付け方の差し替え口（既定は [`PhraseRulesShaper`]）。
 //! - [`auto_sustain`][]: 和音の変わり目でサスティン（CC64）を踏み直す。
 //! - [`note_name`], [`gm_drum_name`], [`gm_program_name`]: display names.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
@@ -23,7 +24,7 @@ pub use auto_sustain::{AutoSustainOptions, SUSTAIN_CC, auto_sustain};
 pub use names::{gm_drum_name, gm_program_name, note_name};
 pub use rng::XorShift;
 pub use sequence::{CtrlEvent, CtrlKind, Note, Sequence};
-pub use shape_velocity::{NoteBeat, ShapeVelocityOptions, shape_velocity};
+pub use shape_velocity::{NoteBeat, PhraseRulesShaper, ShapeVelocityOptions, VelocityShaper, default_velocity_shaper, shape_velocity};
 pub use smf::{MAX_EVENTS, MAX_TRACKS, Smf, SmfTrack, read_smf, write_smf};
 
 /// Ticks per quarter note used throughout the model.

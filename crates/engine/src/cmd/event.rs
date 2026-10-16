@@ -303,12 +303,14 @@ fn velocity(e: &mut Engine, p: &Value) -> Result<Value> {
 
 /// 拍・和音・流れ・フレーズからベロシティを付ける（乱数なし）。
 fn shape_velocity(e: &mut Engine, p: &Value) -> Result<Value> {
-    use soundcraft_midi::{NoteBeat, ShapeVelocityOptions, shape_velocity as shape};
+    use soundcraft_midi::{NoteBeat, ShapeVelocityOptions, VelocityShaper, default_velocity_shaper};
     let opts = ShapeVelocityOptions {
         strength: i64_or(p, "strength", 100).clamp(1, 127) as u8,
         contrast: i64_or(p, "contrast", 100).clamp(0, 100) as u8,
         phrase_gap_ticks: i64_or(p, "phrase_gap_ticks", ShapeVelocityOptions::default().phrase_gap_ticks).max(1),
     };
+    // 付け方は VelocityShaper。既定は PhraseRulesShaper。差し替えは別実装を渡すだけ。
+    let shaper = default_velocity_shaper();
     let idx = note_indices(p);
     let ids = clip_ids_param(e, p);
     let sr = e.session().sample_rate;
@@ -351,7 +353,7 @@ fn shape_velocity(e: &mut Engine, p: &Value) -> Result<Value> {
         let Some(c) = s.find_clip_mut(id) else { continue };
         let ClipContent::Midi { sequence } = &mut c.content else { continue };
         let mut subset: Vec<_> = order.iter().map(|&i| sequence.notes[i]).collect();
-        shape(&mut subset, &beats, &opts);
+        shaper.shape(&mut subset, &beats, &opts);
         for (&i, note) in order.iter().zip(&subset) {
             sequence.notes[i] = *note;
         }
