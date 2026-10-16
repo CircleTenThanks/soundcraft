@@ -65,6 +65,15 @@ pub fn specs() -> Vec<CommandSpec> {
             shape_velocity
         ),
         cmd!(
+            "event.auto_sustain",
+            "Auto Sustain...",
+            ["Event", "MIDI Operations"],
+            None,
+            "{gap_ticks?: 32nd-note (PPQ/32), clips?, indices?}",
+            has_selection,
+            auto_sustain_cmd
+        ),
+        cmd!(
             "event.change_duration",
             "Change Duration...",
             ["Event", "MIDI Operations"],
@@ -352,6 +361,35 @@ fn shape_velocity(e: &mut Engine, p: &Value) -> Result<Value> {
     Ok(json!({"notes": n}))
 }
 
+/// 選択ノートの和音変化に合わせて CC64 を入れる。範囲外の CC は触らない。
+fn auto_sustain_cmd(e: &mut Engine, p: &Value) -> Result<Value> {
+    use soundcraft_midi::{AutoSustainOptions, auto_sustain};
+    let opts =
+        AutoSustainOptions { gap_ticks: i64_or(p, "gap_ticks", AutoSustainOptions::default().gap_ticks).max(1), ..AutoSustainOptions::default() };
+    let idx = note_indices(p);
+    let ids = clip_ids_param(e, p);
+    let mut events = 0usize;
+    for id in ids {
+        let s = e.session_mut();
+        let Some(c) = s.find_clip_mut(id) else { continue };
+        let ClipContent::Midi { sequence } = &mut c.content else { continue };
+        let notes: Vec<_> = if idx.is_empty() {
+            sequence.notes.clone()
+        } else {
+            let mut order: Vec<usize> = idx.iter().copied().filter(|&i| i < sequence.notes.len()).collect();
+            order.sort_unstable();
+            order.dedup();
+            order.iter().map(|&i| sequence.notes[i]).collect()
+        };
+        if notes.is_empty() {
+            continue;
+        }
+        events += auto_sustain(&notes, &mut sequence.ctrls, &opts);
+        sequence.sort();
+    }
+    Ok(json!({"events": events}))
+}
+
 fn duration(e: &mut Engine, p: &Value) -> Result<Value> {
     let op = if let Some(v) = p.get("set").and_then(Value::as_i64) {
         DurationOp::Set(v.max(1))
@@ -605,5 +643,30 @@ mod tests {
         let v0 = notes["notes"][0]["velocity"].as_u64().unwrap();
         let v1 = notes["notes"][1]["velocity"].as_u64().unwrap();
         assert!(v0 > v1, "beat 1 ({v0}) should exceed beat 2 ({v1})");
+    }
+
+    /// 和音が変わると CC64 が踏み直される。
+    #[test]
+    fn auto_sustain_repedals_on_chord_change() {
+        use soundcraft_midi::{CtrlKind, SUSTAIN_CC};
+        use soundcraft_model::{ChannelFormat, ClipContent, TrackKind};
+        let mut e = crate::Engine::default();
+        let t = e.session_mut().add_track(TrackKind::Instrument, ChannelFormat::Stereo, Some("Keys"));
+        let clip = e.execute("midi.new_clip", &json!({"track": t.0})).unwrap()["clip"].as_u64().unwrap();
+        for pitch in [60u8, 64, 67] {
+            e.execute("midi.note_add", &json!({"clip": clip, "pitch": pitch, "start_ticks": 0})).unwrap();
+        }
+        for pitch in [65u8, 69, 72] {
+            e.execute("midi.note_add", &json!({"clip": clip, "pitch": pitch, "start_ticks": 960})).unwrap();
+        }
+        let r = e.execute("event.auto_sustain", &json!({"clips": [clip]})).unwrap();
+        assert!(r["events"].as_u64().unwrap() >= 3);
+        let s = e.session();
+        let id = soundcraft_model::ClipId(clip);
+        let ClipContent::Midi { sequence } = &s.find_clip(id).unwrap().1.content else { panic!("midi") };
+        let sustains: Vec<_> = sequence.ctrls.iter().filter(|c| matches!(c.kind, CtrlKind::Cc(SUSTAIN_CC))).collect();
+        assert!(sustains.iter().any(|c| c.tick == 0 && c.value == 127));
+        assert!(sustains.iter().any(|c| c.tick == 960 && c.value == 127));
+        assert!(sustains.iter().any(|c| c.value == 0 && c.tick < 960));
     }
 }

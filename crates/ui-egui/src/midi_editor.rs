@@ -122,6 +122,9 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
     if tb.small_button("Legato").clicked() {
         op = Some(("event.change_duration", json!({"legato": 0})));
     }
+    if tb.small_button("Sustain").on_hover_text("Auto sustain pedal at chord changes").clicked() {
+        op = Some(("event.auto_sustain", json!({})));
+    }
     if tb.small_button("Shape Vel").on_hover_text("Shape velocity from beat, chord, contour, and phrase").clicked() {
         op = Some(("event.shape_velocity", json!({"strength": 100, "contrast": 100})));
     }

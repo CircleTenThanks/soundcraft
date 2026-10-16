@@ -24,6 +24,8 @@ pub enum Dialog {
     Quantize { grid: String, strength: f64, swing: f64 },
     // Event > Shape Velocity…。全体の強さと強弱の差。
     ShapeVelocity { strength: f64, contrast: f64 },
+    // Event > Auto Sustain…。和音変わり目の隙間（ティック）。
+    AutoSustain { gap_ticks: f64 },
     TempoChange { at: Samples, bpm: f64 }, // from double-clicking the tempo ruler
     Spot(crate::spot::Spot),
     Fades { shape: String },
@@ -55,6 +57,7 @@ impl Dialogs {
             Dialog::Number { .. } => "number",
             Dialog::Quantize { .. } => "quantize",
             Dialog::ShapeVelocity { .. } => "shape_velocity",
+            Dialog::AutoSustain { .. } => "auto_sustain",
             Dialog::TempoChange { .. } => "tempo_change",
             Dialog::Spot(_) => "spot",
             Dialog::Fades { .. } => "fades",
@@ -132,6 +135,7 @@ impl Dialogs {
             }
             "event.quantize" => Dialog::Quantize { grid: "1/16".into(), strength: 100.0, swing: 0.0 },
             "event.shape_velocity" => Dialog::ShapeVelocity { strength: 100.0, contrast: 100.0 },
+            "event.auto_sustain" => Dialog::AutoSustain { gap_ticks: (soundcraft_midi::PPQ / 32) as f64 },
             "edit.fades_create" => Dialog::Fades { shape: "equal power".into() },
             "edit.strip_silence" => Dialog::StripSilence { threshold: -48.0, min_ms: 50.0, pre_ms: 5.0, post_ms: 20.0 },
             "track.group" => {
@@ -290,6 +294,7 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
         Dialog::PathPrompt { title, .. } | Dialog::Number { title, .. } => title.as_str(),
         Dialog::Quantize { .. } => "Quantize...",
         Dialog::ShapeVelocity { .. } => "Shape Velocity...",
+        Dialog::AutoSustain { .. } => "Auto Sustain...",
         Dialog::TempoChange { .. } => "Tempo Change (BPM)",
         Dialog::Spot(_) => "Spot",
         Dialog::Fades { .. } => "Fades",
@@ -510,6 +515,17 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
                         action = Some(("event.shape_velocity".into(), json!({"strength": strength, "contrast": contrast})));
                     }
                 }
+                Dialog::AutoSustain { gap_ticks } => {
+                    ui.add(egui::Slider::new(gap_ticks, 1.0..=480.0).text(tr("Gap ticks")));
+                    ui.label(
+                        egui::RichText::new(tr("Inserts sustain (CC64) at chord changes; leaves CC outside the selection alone."))
+                            .small()
+                            .color(Tokens::current().text_dim),
+                    );
+                    if buttons(ui, "OK", enter) {
+                        action = Some(("event.auto_sustain".into(), json!({"gap_ticks": *gap_ticks as i64})));
+                    }
+                }
                 Dialog::TempoChange { at, bpm } => {
                     ui.horizontal(|ui| {
                         // Same limits the engine enforces (time crate `valid_bpm`).
@@ -653,8 +669,10 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
     if let Some((cmd, mut params)) = action {
         keep = false;
         // MIDI エディタでノート選択があるときは、Event の MIDI 操作をその範囲に限定する
-        if matches!(cmd.as_str(), "event.quantize" | "event.transpose" | "event.change_velocity" | "event.shape_velocity" | "event.change_duration")
-            && !app.midi.selected.is_empty()
+        if matches!(
+            cmd.as_str(),
+            "event.quantize" | "event.transpose" | "event.change_velocity" | "event.shape_velocity" | "event.auto_sustain" | "event.change_duration"
+        ) && !app.midi.selected.is_empty()
         {
             params["indices"] = json!(app.midi.selected);
             if let Some(cid) = crate::midi_editor::target_clip(app) {
